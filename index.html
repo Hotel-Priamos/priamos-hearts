@@ -19,7 +19,6 @@
             overflow: hidden;
             text-align: center;
         }
-        /* Camera Background */
         .camera-container {
             position: fixed;
             top: 0;
@@ -35,8 +34,6 @@
             object-fit: cover;
             opacity: 0.8;
         }
-
-        /* UI Layer */
         .ui-layer {
             position: fixed;
             top: 0;
@@ -46,16 +43,17 @@
             z-index: 10;
             pointer-events: none;
         }
-
-        /* Η Καρδιά καρφωμένη στον 3D χώρο */
+        /* Η καρδιά τοποθετείται σε μια σταθερή θέση στην οθόνη, αλλά εκτός κέντρου (π.χ. δεξιά) */
         .spatial-heart {
             position: absolute;
+            left: 75%; /* Σταθερό σημείο δεξιά στον "χώρο" */
+            top: 45%;
             width: 90px;
             height: 90px;
             transform: translate(-50%, -50%);
             cursor: pointer;
             pointer-events: auto;
-            display: none; /* Εμφανίζεται μόνο όταν την κοιτάς με την κάμερα */
+            transition: opacity 0.3s ease;
         }
         .heart-icon {
             font-size: 65px;
@@ -71,7 +69,7 @@
             top: 30px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.8);
             border: 1px solid rgba(255, 51, 102, 0.4);
             color: #ff99bb;
             padding: 8px 16px;
@@ -81,8 +79,6 @@
             pointer-events: none;
             backdrop-filter: blur(5px);
         }
-
-        /* Permission Overlay */
         .permission-overlay {
             position: fixed;
             top: 0;
@@ -109,8 +105,6 @@
             margin-top: 20px;
             box-shadow: 0 5px 20px rgba(255, 51, 102, 0.5);
         }
-
-        /* Modal Αποκάλυψης */
         .reveal-modal {
             position: fixed;
             top: 50%;
@@ -173,7 +167,7 @@
     <div class="permission-overlay" id="permScreen">
         <div style="font-size: 60px; margin-bottom: 15px;">🧭❤️</div>
         <h1>Hotel Priamos Drop</h1>
-        <p>Στρέψε την κάμερα γύρω σου στον χώρο για να εντοπίσεις την κρυφή καρδιά εγκατάστασης.</p>
+        <p>Στρέψε την κάμερα αριστερά-δεξιά για να εντοπίσεις την κρυφή καρδιά εγκατάστασης στον χώρο.</p>
         <button class="start-btn" onclick="requestSensors()">Ενεργοποίηση</button>
     </div>
 
@@ -181,7 +175,7 @@
         <video id="webcam" autoplay playsinline muted></video>
     </div>
 
-    <div class="radar-hint" id="radarHint">🔍 Ψάξε στον χώρο στρίβοντας το κινητό σου...</div>
+    <div class="radar-hint" id="radarHint">👉 Στρίψτε δεξιά για να βρείτε την καρδιά...</div>
     <div class="ui-layer" id="app"></div>
 
     <button class="reset-btn" onclick="resetTest()">🔄 Reset Test</button>
@@ -192,8 +186,7 @@
         const permScreen = document.getElementById('permScreen');
         const radarHint = document.getElementById('radarHint');
 
-        // Σταθερή εικονική γωνία όπου "στέκεται" η καρδιά στον πραγματικό χώρο (π.χ. 90 μοίρες δεξιά)
-        const targetAngle = 90; 
+        let baseGamma = null; // Αρχική κλίση κινητού
 
         async function initCamera() {
             try {
@@ -224,7 +217,7 @@
             }
         }
 
-        fnStart = function startExperience() {
+        function startExperience() {
             permScreen.style.display = 'none';
             initCamera();
             window.addEventListener('deviceorientation', handleOrientation, true);
@@ -232,51 +225,34 @@
         }
 
         function handleOrientation(event) {
-            // Υποστηρίζουμε απόλυτη πυξίδα (webkitCompassHeading) ή εναλλακτικά το alpha
-            let heading = null;
-            if (event.webkitCompassHeading !== undefined) {
-                heading = event.webkitCompassHeading; // iOS (0 = Βορράς, αυξάνει δεξιόστροφα)
-            } else if (event.alpha !== null) {
-                heading = 360 - event.alpha; // Android/Generic
-            }
+            // event.gamma μετράει την κλίση αριστερά-δεξιά (οριζόντιο στρίψιμο)
+            if (event.gamma !== null) {
+                if (baseGamma === null) baseGamma = event.gamma; // Ορίζουμε το σημείο εκκίνησης
 
-            if (heading !== null) {
-                updateHeartPosition(heading);
-            }
-        }
+                const heartEl = document.getElementById('spatialHeart');
+                if (!heartEl) return;
 
-        function updateHeartPosition(heading) {
-            const isClaimed = localStorage.getItem('priamos_space_claimed');
-            const isRevealed = localStorage.getItem('priamos_space_revealed');
-            if (isClaimed || isRevealed) return;
+                const isClaimed = localStorage.getItem('priamos_space_claimed');
+                const isRevealed = localStorage.getItem('priamos_space_revealed');
+                if (isClaimed || isRevealed) return;
 
-            const heartEl = document.getElementById('spatialHeart');
-            if (!heartEl) return;
+                // Υπολογισμός διαφοράς από το σημείο μηδέν
+                let diff = event.gamma - baseGamma;
 
-            // Υπολογισμός διαφοράς ανάμεσα στο πού κοιτάζει η κάμερα και πού βρίσκεται η καρδιά
-            let diff = targetAngle - heading;
-            while (diff < -180) diff += 360;
-            while (diff > 180) diff -= 360;
-
-            // Εύρος οπτικού πεδίου κάμερας (περίπου +/- 30 μοίρες)
-            const fieldOfView = 30;
-
-            if (Math.abs(diff) < fieldOfView) {
-                // Η κάμερα κοιτάζει προς την καρδιά -> τοποθέτησή της ανάλογα με τη γωνία στην οθόνη
-                const screenWidth = window.innerWidth;
-                const xPos = (screenWidth / 2) + (diff * (screenWidth / fieldOfView));
-                
-                heartEl.style.left = `${xPos}px`;
-                heartEl.style.top = `50%`;
-                heartEl.style.display = 'block';
-                radarHint.innerText = "✨ Η καρδιά είναι εδώ! Πάτα την!";
-            } else {
-                // Η καρδιά βρίσκεται εκτός οθόνης -> δείχνουμε κατεύθυνση περιστροφής
-                heartEl.style.display = 'none';
-                if (diff > 0) {
-                    radarHint.innerText = "👉 Στρίψτε δεξιά για να την εντοπίσετε";
+                // Αν στρίψεις το κινητό προς τα δεξιά (κατάλληλη γωνία), η καρδιά αποκαλύπτεται στον φακό
+                // Αν κοιτάς ευθεία ή αριστερά, η καρδιά εξαφανίζεται (opacity: 0)
+                if (diff > 12 && diff < 45) {
+                    heartEl.style.opacity = '1';
+                    heartEl.style.pointerEvents = 'auto';
+                    radarHint.innerText = "✨ Η καρδιά είναι μπροστά σου! Πάτα την!";
                 } else {
-                    radarHint.innerText = "👈 Στρίψτε αριστερά για να την εντοπίσετε";
+                    heartEl.style.opacity = '0';
+                    heartEl.style.pointerEvents = 'none';
+                    if (diff <= 12) {
+                        radarHint.innerText = "👉 Στρίψτε δεξιά για να την εντοπίσετε";
+                    } else {
+                        radarHint.innerText = "👈 Στρίψτε αριστερά, την προσπεράσατε";
+                    }
                 }
             }
         }
@@ -287,8 +263,8 @@
 
             if (!isClaimed && !isRevealed) {
                 app.innerHTML = `
-                    <div class="spatial-heart" id="spatialHeart" onclick="revealCode()">
-                        <div class="heart-icon">❤️</div>
+                    <div class="spatial-heart" id="spatialHeart" style="opacity: 0;">
+                        <div class="heart-icon" onclick="revealCode()">❤️</div>
                     </div>
                 `;
             } else if (isRevealed && !isClaimed) {
@@ -323,6 +299,7 @@
         window.resetTest = function() {
             localStorage.removeItem('priamos_space_claimed');
             localStorage.removeItem('priamos_space_revealed');
+            baseGamma = null;
             permScreen.style.display = 'flex';
             radarHint.style.display = 'block';
             renderApp();
