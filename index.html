@@ -43,27 +43,35 @@
             z-index: 10;
             pointer-events: none;
         }
-        /* Η καρδιά τοποθετείται σε μια σταθερή θέση στην οθόνη, αλλά εκτός κέντρου (π.χ. δεξιά) */
+        
+        /* Η καρδιά τοποθετημένη σταθερά σε ένα σημείο του "χώρου" (π.χ. δεξιά και πιο χαμηλά) */
         .spatial-heart {
             position: absolute;
-            left: 75%; /* Σταθερό σημείο δεξιά στον "χώρο" */
-            top: 45%;
-            width: 90px;
-            height: 90px;
-            transform: translate(-50%, -50%);
+            left: 75%;
+            top: 60%;
+            width: 100px;
+            height: 100px;
+            transform: translate(-50%, -50%) scale(0);
             cursor: pointer;
             pointer-events: auto;
-            transition: opacity 0.3s ease;
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
+            opacity: 0;
         }
+        .spatial-heart.visible {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+        }
+
         .heart-icon {
-            font-size: 65px;
-            filter: drop-shadow(0 0 15px rgba(255, 51, 102, 0.9));
+            font-size: 70px;
+            filter: drop-shadow(0 0 20px rgba(255, 51, 102, 0.9));
             animation: pulse 1.5s infinite ease-in-out;
         }
         @keyframes pulse {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.15); }
         }
+
         .radar-hint {
             position: fixed;
             top: 30px;
@@ -72,20 +80,21 @@
             background: rgba(0, 0, 0, 0.8);
             border: 1px solid rgba(255, 51, 102, 0.4);
             color: #ff99bb;
-            padding: 8px 16px;
+            padding: 10px 18px;
             border-radius: 20px;
             font-size: 13px;
             z-index: 20;
             pointer-events: none;
             backdrop-filter: blur(5px);
         }
-        .permission-overlay {
+
+        .start-overlay {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(10, 10, 10, 0.95);
+            background: rgba(10, 10, 10, 0.96);
             z-index: 100;
             display: flex;
             flex-direction: column;
@@ -97,7 +106,7 @@
             background: #ff3366;
             color: #fff;
             border: none;
-            padding: 15px 30px;
+            padding: 15px 35px;
             font-size: 18px;
             font-weight: bold;
             border-radius: 30px;
@@ -105,6 +114,7 @@
             margin-top: 20px;
             box-shadow: 0 5px 20px rgba(255, 51, 102, 0.5);
         }
+
         .reveal-modal {
             position: fixed;
             top: 50%;
@@ -164,18 +174,18 @@
 </head>
 <body>
 
-    <div class="permission-overlay" id="permScreen">
-        <div style="font-size: 60px; margin-bottom: 15px;">🧭❤️</div>
+    <div class="start-overlay" id="startScreen">
+        <div style="font-size: 60px; margin-bottom: 15px;">📷❤️</div>
         <h1>Hotel Priamos Drop</h1>
-        <p>Στρέψε την κάμερα αριστερά-δεξιά για να εντοπίσεις την κρυφή καρδιά εγκατάστασης στον χώρο.</p>
-        <button class="start-btn" onclick="requestSensors()">Ενεργοποίηση</button>
+        <p>Σάρωσε τον χώρο με την κάμερα σου (μετακίνησε το κινητό δεξιά-αριστερά) για να εντοπίσεις την εγκατάσταση.</p>
+        <button class="start-btn" onclick="startApp()">Εκκίνηση Κάμερας</button>
     </div>
 
     <div class="camera-container">
         <video id="webcam" autoplay playsinline muted></video>
     </div>
 
-    <div class="radar-hint" id="radarHint">👉 Στρίψτε δεξιά για να βρείτε την καρδιά...</div>
+    <div class="radar-hint" id="radarHint">🔍 Σάρωσε τον χώρο μετακινώντας το κινητό...</div>
     <div class="ui-layer" id="app"></div>
 
     <button class="reset-btn" onclick="resetTest()">🔄 Reset Test</button>
@@ -183,10 +193,10 @@
     <script>
         const app = document.getElementById('app');
         const videoElement = document.getElementById('webcam');
-        const permScreen = document.getElementById('permScreen');
+        const startScreen = document.getElementById('startScreen');
         const radarHint = document.getElementById('radarHint');
 
-        let baseGamma = null; // Αρχική κλίση κινητού
+        let isDiscovered = false;
 
         async function initCamera() {
             try {
@@ -200,60 +210,42 @@
             }
         }
 
-        async function requestSensors() {
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                try {
-                    const response = await DeviceOrientationEvent.requestPermission();
-                    if (response === 'granted') {
-                        startExperience();
-                    } else {
-                        alert("Απαιτείται άδεια αισθητήρων.");
-                    }
-                } catch (e) {
-                    console.log(e);
-                }
-            } else {
-                startExperience();
-            }
-        }
-
-        function startExperience() {
-            permScreen.style.display = 'none';
+        function startApp() {
+            startScreen.style.display = 'none';
             initCamera();
-            window.addEventListener('deviceorientation', handleOrientation, true);
             renderApp();
+
+            // Προσομοίωση/Ενεργοποίηση σάρωσης χώρου: 
+            // Μετά από λίγες κινήσεις ή αυτόματα με εναλλαγή, ή με αγγίγματα σάρωσης, 
+            // κάνουμε την καρδιά να "αποκαλύφθεί" σαν να την βρήκε η κάμερα.
+            // Εναλλακτικά, ο χρήστης μπορεί να κάνει swipe/drag στην οθόνη για να ψάξει τον χώρο.
         }
 
-        function handleOrientation(event) {
-            // event.gamma μετράει την κλίση αριστερά-δεξιά (οριζόντιο στρίψιμο)
-            if (event.gamma !== null) {
-                if (baseGamma === null) baseGamma = event.gamma; // Ορίζουμε το σημείο εκκίνησης
+        // Ανίχνευση κίνησης αφής/σάρωσης (Pan/Swipe) για να "σκαγάρει" ο χρήστης τον χώρο στην οθόνη
+        let touchStartX = 0;
+        window.addEventListener('touchstart', e => {
+            touchStartX = e.touches[0].clientX;
+        });
 
-                const heartEl = document.getElementById('spatialHeart');
-                if (!heartEl) return;
+        window.addEventListener('touchmove', e => {
+            if (isDiscovered) return;
+            let currentX = e.touches[0].clientX;
+            let diff = touchStartX - currentX;
 
-                const isClaimed = localStorage.getItem('priamos_space_claimed');
-                const isRevealed = localStorage.getItem('priamos_space_revealed');
-                if (isClaimed || isRevealed) return;
+            // Αν ο χρήστης σύρει το κινητό/δάχτυλο προς τα αριστερά/δεξιά (σάρωση χώρου)
+            if (Math.abs(diff) > 50) {
+                revealSpatialHeart();
+            }
+        });
 
-                // Υπολογισμός διαφοράς από το σημείο μηδέν
-                let diff = event.gamma - baseGamma;
-
-                // Αν στρίψεις το κινητό προς τα δεξιά (κατάλληλη γωνία), η καρδιά αποκαλύπτεται στον φακό
-                // Αν κοιτάς ευθεία ή αριστερά, η καρδιά εξαφανίζεται (opacity: 0)
-                if (diff > 12 && diff < 45) {
-                    heartEl.style.opacity = '1';
-                    heartEl.style.pointerEvents = 'auto';
-                    radarHint.innerText = "✨ Η καρδιά είναι μπροστά σου! Πάτα την!";
-                } else {
-                    heartEl.style.opacity = '0';
-                    heartEl.style.pointerEvents = 'none';
-                    if (diff <= 12) {
-                        radarHint.innerText = "👉 Στρίψτε δεξιά για να την εντοπίσετε";
-                    } else {
-                        radarHint.innerText = "👈 Στρίψτε αριστερά, την προσπεράσατε";
-                    }
-                }
+        // Για δοκιμή και με κλικ/ποντίκι στον υπολογιστή ή απλό άγγιγμα αν δεν γίνει swipe
+        function revealSpatialHeart() {
+            if (isDiscovered) return;
+            isDiscovered = true;
+            const heartEl = document.getElementById('spatialHeart');
+            if (heartEl) {
+                heartEl.classList.add('visible');
+                radarHint.innerText = "✨ Εντόπισες την εγκατάσταση! Πάτα την καρδιά!";
             }
         }
 
@@ -263,17 +255,24 @@
 
             if (!isClaimed && !isRevealed) {
                 app.innerHTML = `
-                    <div class="spatial-heart" id="spatialHeart" style="opacity: 0;">
-                        <div class="heart-icon" onclick="revealCode()">❤️</div>
+                    <div class="spatial-heart" id="spatialHeart" onclick="revealCode()">
+                        <div class="heart-icon">❤️</div>
                     </div>
                 `;
+                // Αν θέλεις να εμφανίζεται αυτόματα μόλις περάσουν 2 δευτερόλεπτα σάρωσης:
+                setTimeout(() => {
+                    if(!isDiscovered) {
+                        // Δίνουμε τη δυνατότητα να φανεί με μια μικρή κίνηση ή αυτόματα αν αργεί
+                        radarHint.innerText = "👉 Σύρε την οθόνη δεξιά/αριστερά για να ψάξεις...";
+                    }
+                }, 1500);
             } else if (isRevealed && !isClaimed) {
                 radarHint.style.display = 'none';
                 app.innerHTML = `
                     <div class="reveal-modal">
                         <div style="font-size: 40px; margin-bottom: 5px;">🎉</div>
                         <h1>Την εντόπισες στον χώρο!</h1>
-                        <p>Ήσουν ο πρώτος τυχερός που έστριψες και βρήκες την καρδιά έξω από το Hotel Priamos!</p>
+                        <p>Ήσουν ο πρώτος τυχερός που βρήκες την κρυφή καρδιά στο Hotel Priamos!</p>
                         <div class="code-box">PRIAMOS-HEART-01</div>
                         <p style="font-size: 12px; color: #ff99bb; margin-bottom: 0;">Δείξε αυτή την οθόνη στη ρεσεψιόν. Η εγκατάσταση μόλις εξαφανίστηκε.</p>
                     </div>
@@ -299,9 +298,10 @@
         window.resetTest = function() {
             localStorage.removeItem('priamos_space_claimed');
             localStorage.removeItem('priamos_space_revealed');
-            baseGamma = null;
-            permScreen.style.display = 'flex';
+            isDiscovered = false;
+            startScreen.style.display = 'flex';
             radarHint.style.display = 'block';
+            radarHint.innerText = "🔍 Σάρωσε τον χώρο μετακινώντας το κινητό...";
             renderApp();
         }
     </script>
