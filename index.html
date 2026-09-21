@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hotel Priamos - Spatial Heart Drop</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #000;
+            color: #fff;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            text-align: center;
+        }
+        /* Camera Background */
+        .camera-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            background: #000;
+        }
+        #webcam {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.8;
+        }
+
+        /* UI Layer */
+        .ui-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none; /* Να περνάνε τα κλικ από κάτω εκτός από τα κουμπιά/αντικείμενα */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Η Καρδιά στον 3D χώρο */
+        .spatial-heart {
+            position: absolute;
+            width: 90px;
+            height: 90px;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            pointer-events: auto; /* Επιτρέπει το πάτημα πάνω στην καρδιά */
+            transition: transform 0.1s ease-out;
+            display: none; /* Εμφανίζεται όταν ενεργοποιηθούν οι αισθητήρες */
+        }
+        .heart-icon {
+            font-size: 65px;
+            filter: drop-shadow(0 0 15px rgba(255, 51, 102, 0.9));
+            animation: pulse 1.5s infinite ease-in-out;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+        }
+        .radar-hint {
+            position: fixed;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(255, 51, 102, 0.4);
+            color: #ff99bb;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            z-index: 20;
+            pointer-events: none;
+            backdrop-filter: blur(5px);
+        }
+
+        /* Permission Prompt Button for iOS / Android */
+        .permission-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 10, 10, 0.95);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 30px;
+        }
+        .start-btn {
+            background: #ff3366;
+            color: #fff;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            margin-top: 20px;
+            box-shadow: 0 5px 20px rgba(255, 51, 102, 0.5);
+        }
+
+        /* Modal/Κάρτα Αποκάλυψης */
+        .reveal-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(15, 15, 15, 0.95);
+            border: 2px solid #ff3366;
+            padding: 25px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 340px;
+            z-index: 50;
+            pointer-events: auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            backdrop-filter: blur(10px);
+        }
+        h1 { font-size: 22px; margin-bottom: 8px; color: #fff; }
+        p { font-size: 14px; color: #ddd; line-height: 1.4; margin-bottom: 15px; }
+        .code-box {
+            background: rgba(25, 25, 25, 0.95);
+            border: 2px dashed #ff3366;
+            padding: 12px;
+            font-size: 22px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            color: #ff3366;
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
+        .expired-box {
+            background: rgba(15, 15, 15, 0.95);
+            border: 2px solid #444;
+            padding: 25px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 320px;
+            z-index: 50;
+            pointer-events: auto;
+        }
+
+        /* Reset Button */
+        .reset-btn {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.15);
+            color: #ccc;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 8px 16px;
+            font-size: 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            z-index: 60;
+            pointer-events: auto;
+            backdrop-filter: blur(5px);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Permission Screen (Απαραίτητο για τα Sensors σε iOS/Android) -->
+    <div class="permission-overlay" id="permScreen">
+        <div style="font-size: 60px; margin-bottom: 15px;">🧭❤️</div>
+        <h1>Hotel Priamos Drop</h1>
+        <p>Στρέψε την κάμερα γύρω σου στον χώρο για να εντοπίσεις την κρυφή καρδιά εγκατάστασης.</p>
+        <button class="start-btn" onclick="requestSensors()">Ενεργοποίηση</button>
+    </div>
+
+    <!-- Camera Background -->
+    <div class="camera-container">
+        <video id="webcam" autoplay playsinline muted></video>
+    </div>
+
+    <!-- UI & Radar Hint -->
+    <div class="radar-hint" id="radarHint">🔍 Ψάξε στον χώρο στρίβοντας το κινητό σου...</div>
+    <div class="ui-layer" id="app"></div>
+
+    <!-- Reset Button -->
+    <button class="reset-btn" onclick="resetTest()">🔄 Reset Test</button>
+
+    <script>
+        const app = document.getElementById('app');
+        const videoElement = document.getElementById('webcam');
+        const permScreen = document.getElementById('permScreen');
+        const radarHint = document.getElementById('radarHint');
+
+        // Σταθερή εικονική θέση της καρδιάς στον χώρο (σε μοίρες 0° - 360° γύρω από τον χρήστη)
+        const targetAngle = 75; // Μπορείς να το αλλάξεις (π.χ. 75 μοίρες δεξιόστροφα από το σημείο εκκίνησης)
+        let currentAlpha = 0;
+
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" },
+                    audio: false
+                });
+                videoElement.srcObject = stream;
+            } catch (err) {
+                console.log("Camera running in fallback mode.");
+            }
+        }
+
+        async function requestSensors() {
+            // Ζητάει άδεια για τα orientation events (ιδιαίτερα σε iOS 13+)
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                try {
+                    const response = await DeviceOrientationEvent.requestPermission();
+                    if (response === 'granted') {
+                        startExperience();
+                    } else {
+                        alert("Απαιτείται πρόσβαση στους αισθητήρες για την εμπειρία.");
+                    }
+                } catch (e) {
+                    console.log(e);
+                }
+            } else {
+                startExperience();
+            }
+        }
+
+        function startExperience() {
+            permScreen.style.display = 'none';
+            initCamera();
+            window.addEventListener('deviceorientation', handleOrientation, true);
+            renderApp();
+        }
+
+        function handleOrientation(event) {
+            // event.alpha δίνει την περιστροφή της συσκευής γύρω από τον κατακόρυφο άξονα (πυξίδα/περιστροφή)
+            if (event.alpha !== null) {
+                currentAlpha = event.alpha;
+                updateHeartPosition();
+            }
+        }
+
+        function updateHeartPosition() {
+            const isClaimed = localStorage.getItem('priamos_space_claimed');
+            const isRevealed = localStorage.getItem('priamos_space_revealed');
+            if (isClaimed || isRevealed) return;
+
+            const heartEl = document.getElementById('spatialHeart');
+            if (!heartEl) return;
+
+            // Υπολογισμός διαφοράς γωνίας ανάμεσα στο πού κοιτάζει το κινητό και πού είναι η καρδιά
+            let diff = targetAngle - currentAlpha;
+            while (diff < -180) diff += 360;
+            while (diff > 180) diff -= 360;
+
+            // Αν η διαφορά είναι εντός του οπτικού πεδίου (π.χ. +/- 45 μοίρες)
+            if (Math.abs(diff) < 45) {
+                // Μετατροπή μοιρών σε pixels πάνω στην οθόνη
+                const screenWidth = window.innerWidth;
+                const xPos = (screenWidth / 2) + (diff * (screenWidth / 90));
+                
+                heartEl.style.left = `${xPos}px`;
+                heartEl.style.top = `50%`;
+                heartEl.style.display = 'block';
+                radarHint.innerText = "✨ Η καρδιά είναι κοντά! Στρέψου προς τα εκεί!";
+            } else {
+                // Η καρδιά είναι εκτός οθόνης, πρέπει να στρίψεις αριστερά/δεξιά
+                heartEl.style.display = 'none';
+                if (diff > 0) {
+                    radarHint.innerText = "👉 Στρίψτε δεξιά για να την εντοπίσετε";
+                } else {
+                    radarHint.innerText = "👈 Στρίψτε αριστερά για να την εντοπίσετε";
+                }
+            }
+        }
+
+        function renderApp() {
+            const isClaimed = localStorage.getItem('priamos_space_claimed');
+            const isRevealed = localStorage.getItem('priamos_space_revealed');
+
+            if (!isClaimed && !isRevealed) {
+                app.innerHTML = `
+                    <div class="spatial-heart" id="spatialHeart" onclick="revealCode()">
+                        <div class="heart-icon">❤️</div>
+                    </div>
+                `;
+                updateHeartPosition();
+            } else if (isRevealed && !isClaimed) {
+                radarHint.style.display = 'none';
+                app.innerHTML = `
+                    <div class="reveal-modal">
+                        <div style="font-size: 40px; margin-bottom: 5px;">🎉</div>
+                        <h1>Την εντόπισες στον χώρο!</h1>
+                        <p>Ήσουν ο πρώτος τυχερός που έστριψα και βρήκες την καρδιά έξω από το Hotel Priamos!</p>
+                        <div class="code-box">PRIAMOS-HEART-01</div>
+                        <p style="font-size: 12px; color: #ff99bb; margin-bottom: 0;">Δείξε αυτή την οθόνη στη ρεσεψιόν. Η εγκατάσταση μόλις εξαφανίστηκε.</p>
+                    </div>
+                `;
+                localStorage.setItem('priamos_space_claimed', 'true');
+            } else {
+                radarHint.style.display = 'none';
+                app.innerHTML = `
+                    <div class="expired-box">
+                        <div style="font-size: 50px; margin-bottom: 10px;">🖤</div>
+                        <h1>Η καρδιά έφυγε!</h1>
+                        <p style="color: #aaa; margin-top: 10px; margin-bottom: 0;">Κάποιος άλλος την εντόπισε πρώτος στον χώρο και την πήρε. Η δράση ολοκληρώθηκε!</p>
+                    </div>
+                `;
+            }
+        }
+
+        window.revealCode = function() {
+            localStorage.setItem('priamos_space_revealed', 'true');
+            renderApp();
+        }
+
+        window.resetTest = function() {
+            localStorage.removeItem('priamos_space_claimed');
+            localStorage.removeItem('priamos_space_revealed');
+            permScreen.style.display = 'flex';
+            radarHint.style.display = 'block';
+            renderApp();
+        }
+    </script>
+</body>
+</html>
