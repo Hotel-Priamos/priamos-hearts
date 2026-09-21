@@ -3,69 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Hotel Priamos - Spatial Heart Drop</title>
+    <title>Hotel Priamos - Spatial AR Heart</title>
+    <!-- Φόρτωση A-Frame και AR.js για σταθερή τοποθέτηση στον χώρο -->
+    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #000;
-            color: #fff;
-            height: 100vh;
-            width: 100vw;
+            margin: 0;
             overflow: hidden;
-            text-align: center;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
-        .camera-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-            background: #000;
-        }
-        #webcam {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            opacity: 0.8;
-        }
-        .ui-layer {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 10;
-            pointer-events: none;
-        }
-        
-        /* Η καρδιά είναι ΜΟΝΙΜΑ σταθερή και αναμμένη σε ένα συγκεκριμένο σημείο (π.χ. δεξιά και πιο ψηλά) */
-        .spatial-heart {
-            position: absolute;
-            left: 80%; /* Σταθερό σημείο στον άξονα Χ */
-            top: 35%; /* Σταθερό σημείο στον άξονα Υ */
-            width: 100px;
-            height: 100px;
-            transform: translate(-50%, -50%);
-            cursor: pointer;
-            pointer-events: auto; /* Επιτρέπει να την πατήσεις */
-        }
-
-        .heart-icon {
-            font-size: 75px;
-            filter: drop-shadow(0 0 20px rgba(255, 51, 102, 0.9));
-            animation: pulse 1.5s infinite ease-in-out;
-        }
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.15); }
-        }
-
         .radar-hint {
             position: fixed;
             top: 30px;
@@ -77,38 +24,12 @@
             padding: 10px 18px;
             border-radius: 20px;
             font-size: 13px;
-            z-index: 20;
+            z-index: 9999;
             pointer-events: none;
             backdrop-filter: blur(5px);
+            text-align: center;
         }
-
-        .start-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(10, 10, 10, 0.96);
-            z-index: 100;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            padding: 30px;
-        }
-        .start-btn {
-            background: #ff3366;
-            color: #fff;
-            border: none;
-            padding: 15px 35px;
-            font-size: 18px;
-            font-weight: bold;
-            border-radius: 30px;
-            cursor: pointer;
-            margin-top: 20px;
-            box-shadow: 0 5px 20px rgba(255, 51, 102, 0.5);
-        }
-
+        /* Modal Αποκάλυψης */
         .reveal-modal {
             position: fixed;
             top: 50%;
@@ -120,12 +41,14 @@
             border-radius: 20px;
             width: 90%;
             max-width: 340px;
-            z-index: 50;
-            pointer-events: auto;
+            z-index: 10000;
+            text-align: center;
             box-shadow: 0 10px 30px rgba(0,0,0,0.8);
             backdrop-filter: blur(10px);
+            color: #fff;
+            display: none;
         }
-        h1 { font-size: 22px; margin-bottom: 8px; color: #fff; }
+        h1 { font-size: 22px; margin-bottom: 8px; }
         p { font-size: 14px; color: #ddd; line-height: 1.4; margin-bottom: 15px; }
         .code-box {
             background: rgba(25, 25, 25, 0.95);
@@ -137,16 +60,6 @@
             color: #ff3366;
             border-radius: 10px;
             margin-bottom: 15px;
-        }
-        .expired-box {
-            background: rgba(15, 15, 15, 0.95);
-            border: 2px solid #444;
-            padding: 25px;
-            border-radius: 20px;
-            width: 90%;
-            max-width: 320px;
-            z-index: 50;
-            pointer-events: auto;
         }
         .reset-btn {
             position: fixed;
@@ -160,100 +73,65 @@
             font-size: 12px;
             border-radius: 20px;
             cursor: pointer;
-            z-index: 60;
-            pointer-events: auto;
+            z-index: 10000;
             backdrop-filter: blur(5px);
         }
     </style>
 </head>
-<body>
+<body style="margin: 0; overflow: hidden;">
 
-    <div class="start-overlay" id="startScreen">
-        <div style="font-size: 60px; margin-bottom: 15px;">🎯❤️</div>
-        <h1>Hotel Priamos Drop</h1>
-        <p>Στρέψε την κάμερα γύρω σου. Η καρδιά είναι σταθερά εγκατεστημένη σε ένα σημείο στον χώρο!</p>
-        <button class="start-btn" onclick="startApp()">Εκκίνηση Κάμερας</button>
+    <div class="radar-hint" id="radarHint">🎯 Στρέψτε την κάμερα στον χώρο. Η καρδιά είναι σταθερά εγκατεστημένη μπροστά σας!</div>
+
+    <!-- Modal Επιτυχίας -->
+    <div class="reveal-modal" id="revealModal">
+        <div style="font-size: 40px; margin-bottom: 5px;">🎉</div>
+        <h1>Την εντόπισες στον χώρο!</h1>
+        <p>Ήσουν ο τυχερός που βρήκε την κρυφή καρδιά εγκατάστασης στο Hotel Priamos!</p>
+        <div class="code-box">PRIAMOS-HEART-01</div>
+        <p style="font-size: 12px; color: #ff99bb; margin-bottom: 0;">Δείξε αυτή την οθόνη στη ρεσεψιόν.</p>
     </div>
-
-    <div class="camera-container">
-        <video id="webcam" autoplay playsinline muted></video>
-    </div>
-
-    <div class="radar-hint" id="radarHint">🔍 Στρίψτε το κινητό για να βρείτε την καρδιά...</div>
-    <div class="ui-layer" id="app"></div>
 
     <button class="reset-btn" onclick="resetTest()">🔄 Reset Test</button>
 
+    <!-- AR Scene -->
+    <a-scene embedded vr-mode-ui="enabled: false" arjs="sourceType: webcam; debugUIEnabled: false; gpsEnabled: false;">
+        
+        <!-- Κάμερα Χρήστη -->
+        <a-camera gps-camera rotation-reader></a-camera>
+
+        <!-- Σταθερό 3D Αντικείμενο (Καρδιά) τοποθετημένο ακριβώς μπροστά στον χώρο -->
+        <!-- Θέση: x (δεξιά/αριστερά), y (ύψος), z (απόσταση μπροστά) -->
+        <a-entity id="spatialHeart" position="0 0 -2" scale="0.8 0.8 0.8" class="clickable" onclick="revealCode()">
+            <!-- 3D Text ή Σχήμα Καρδιάς (HTML/Plane με Emoji ή Εικόνα) -->
+            <a-plane width="1.2" height="1.2" material="transparent: true; opacity: 0;"></a-plane>
+            <a-text value="❤️" align="center" scale="3 3 3" color="#ff3366"></a-text>
+        </a-entity>
+
+    </a-scene>
+
     <script>
-        const app = document.getElementById('app');
-        const videoElement = document.getElementById('webcam');
-        const startScreen = document.getElementById('startScreen');
-        const radarHint = document.getElementById('radarHint');
+        function revealCode() {
+            const isClaimed = localStorage.getItem('priamos_ar_claimed');
+            if (isClaimed) return;
 
-        async function initCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" },
-                    audio: false
-                });
-                videoElement.srcObject = stream;
-            } catch (err) {
-                console.log("Camera fallback active.");
-            }
-        }
-
-        function startApp() {
-            startScreen.style.display = 'none';
-            initCamera();
-            renderApp();
-        }
-
-        function renderApp() {
-            const isClaimed = localStorage.getItem('priamos_space_claimed');
-            const isRevealed = localStorage.getItem('priamos_space_revealed');
-
-            if (!isClaimed && !isRevealed) {
-                app.innerHTML = `
-                    <div class="spatial-heart" id="spatialHeart" onclick="revealCode()">
-                        <div class="heart-icon">❤️</div>
-                    </div>
-                `;
-                radarHint.innerText = "✨ Η καρδιά είναι στον χώρο! Στρίψτε την κάμερα για να την εντοπίσετε.";
-            } else if (isRevealed && !isClaimed) {
-                radarHint.style.display = 'none';
-                app.innerHTML = `
-                    <div class="reveal-modal">
-                        <div style="font-size: 40px; margin-bottom: 5px;">🎉</div>
-                        <h1>Την εντόπισες στον χώρο!</h1>
-                        <p>Ήσουν ο πρώτος τυχερός που βρήκες την κρυφή καρδιά στο Hotel Priamos!</p>
-                        <div class="code-box">PRIAMOS-HEART-01</div>
-                        <p style="font-size: 12px; color: #ff99bb; margin-bottom: 0;">Δείξε αυτή την οθόνη στη ρεσεψιόν. Η εγκατάσταση μόλις εξαφανίστηκε.</p>
-                    </div>
-                `;
-                localStorage.setItem('priamos_space_claimed', 'true');
-            } else {
-                radarHint.style.display = 'none';
-                app.innerHTML = `
-                    <div class="expired-box">
-                        <div style="font-size: 50px; margin-bottom: 10px;">🖤</div>
-                        <h1>Η καρδιά έφυγε!</h1>
-                        <p style="color: #aaa; margin-top: 10px; margin-bottom: 0;">Κάποιος άλλος την εντόπισε πρώτος στον χώρο και την πήρε. Η δράση ολοκληρώθηκε!</p>
-                    </div>
-                `;
-            }
-        }
-
-        window.revealCode = function() {
-            localStorage.setItem('priamos_space_revealed', 'true');
-            renderApp();
+            localStorage.getItem('priamos_ar_claimed', 'true');
+            document.getElementById('revealModal').style.display = 'block';
+            document.getElementById('radarHint').style.display = 'none';
+            document.getElementById('spatialHeart').style.display = 'none';
         }
 
         window.resetTest = function() {
-            localStorage.removeItem('priamos_space_claimed');
-            localStorage.removeItem('priamos_space_revealed');
-            startScreen.style.display = 'flex';
-            radarHint.style.display = 'block';
-            renderApp();
+            localStorage.removeItem('priamos_ar_claimed');
+            location.reload();
+        }
+
+        // Έλεγχος αν έχει ήδη ληφθεί
+        window.onload = function() {
+            if (localStorage.getItem('priamos_ar_claimed')) {
+                document.getElementById('revealModal').style.display = 'block';
+                document.getElementById('radarHint').style.display = 'none';
+                document.getElementById('spatialHeart').style.display = 'none';
+            }
         }
     </script>
 </body>
