@@ -310,12 +310,13 @@
         `distance: ${dist.toFixed(1)} m`;
     }
 
+    // Show a simple distance hint until you're within the reveal radius
+    distanceHint.style.display='block';
     if(dist > REVEAL_RADIUS_M){
-      distanceHint.style.display='block';
       const arrow = diff < 0 ? '◀' : '▶';
-      distanceHint.textContent = `${arrow} ${Math.round(dist)}μ μακριά — ακολούθησε το βέλος`;
+      distanceHint.textContent = `${arrow} Πλησίασε την καρδιά — ${Math.round(dist)}μ`;
     } else {
-      distanceHint.style.display='none';
+      distanceHint.textContent = `📍 ${Math.round(dist)}μ — είσαι κοντά, γύρνα το κινητό`;
     }
 
     const heartEl=document.getElementById('spatialHeart');
@@ -330,9 +331,14 @@
       heartEl.classList.add('visible');
       hintLeft.classList.remove('show'); hintRight.classList.remove('show');
       heartVisible=true;
+      distanceHint.style.display='block';
+      distanceHint.textContent = `❤️ ${Math.round(dist)}μ — Πάτα πάνω στην καρδιά!`;
     } else {
       if(heartEl) heartEl.classList.remove('visible');
       heartVisible=false;
+      // Direction arrows update independently of whether the heart element
+      // exists (e.g. if the "found/claimed" screen is showing instead),
+      // so they never silently stop working.
       if(diff<0){ hintLeft.classList.add('show'); hintRight.classList.remove('show'); }
       else{ hintRight.classList.add('show'); hintLeft.classList.remove('show'); }
     }
