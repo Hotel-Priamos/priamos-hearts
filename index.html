@@ -60,6 +60,7 @@
     background:rgba(0,0,0,.7); color:var(--pink-soft);
     padding:7px 16px; border-radius:16px; font-size:12px;
     z-index:15; pointer-events:none; display:none;
+    max-width:92vw;
   }
 
   .top-bar{
@@ -104,7 +105,7 @@
     background:rgba(0,0,0,.82); border:1px solid rgba(255,153,187,.4);
     padding:10px 14px; border-radius:12px; font-size:11.5px; color:var(--pink-soft);
     z-index:300; text-align:left; line-height:1.7; pointer-events:none; display:none;
-    min-width:168px; backdrop-filter:blur(4px);
+    min-width:190px; backdrop-filter:blur(4px);
   }
   .debug-panel.show{ display:block; }
 
@@ -121,7 +122,7 @@
   <div class="panel" id="startScreen">
     <div style="font-size:54px;margin-bottom:12px;">❤️</div>
     <h1>Hotel Priamos — Δοκιμή AR</h1>
-    <p>Θα χρειαστεί άδεια για κάμερα, τοποθεσία και πυξίδα. Η καρδιά "κρέμεται" σε συγκεκριμένο σημείο στον πραγματικό χώρο — θα φαίνεται μόνο όταν πλησιάσεις εκεί και στοχεύεις το κινητό προς τα εκεί.</p>
+    <p>Θα χρειαστεί άδεια για κάμερα, τοποθεσία και πυξίδα. Υπάρχουν 5 κρυμμένες καρδιές σε διαφορετικά σημεία της Αθήνας — η εφαρμογή θα σε οδηγήσει στην πλησιέστερη σε σένα.</p>
     <button class="btn" id="startBtn">Εκκίνηση</button>
   </div>
 
@@ -158,16 +159,26 @@
   const setStore = (k,v) => { try { localStorage.setItem(k,v); } catch(e){} };
   const delStore = k => { try { localStorage.removeItem(k); } catch(e){} };
 
-  // --- Fixed target: Μαρίνου Αντύπα 585, Αργυρούπολη 164 52 ---
-  const TARGET_LAT = 37.9138726;
-  const TARGET_LNG = 23.7449097;
+  // --- Multiple target locations. Each user gets routed to whichever one is nearest to them. ---
+  // NOTE: coordinates below are best-effort estimates for these addresses.
+  // Before going live, verify/adjust each lat/lng by dropping a pin on the exact
+  // spot in Google Maps and copying the coordinates shown in the URL — accuracy
+  // matters a lot here since REVEAL_RADIUS_M is only 25 meters.
+  const TARGETS = [
+    { id:'pagkrati', name:'Παγκράτι — Φωκιανού 26', lat:37.9663, lng:23.7452 },
+    { id:'moschato', name:'Μοσχάτο — Λεωφ. Ποσειδώνος 53 & Πλάτωνος 1', lat:37.9440, lng:23.6743 },
+    { id:'metamorfosi', name:'Μεταμόρφωση — Ελ. Βενιζέλου 22 & Τατοΐου', lat:38.0620, lng:23.7480 },
+    { id:'ilioupoli', name:'Ηλιούπολη — Λεωφ. Βουλιαγμένης 352', lat:37.9280, lng:23.7570 },
+    { id:'gazi', name:'Γκάζι — Ηρακλειδών 72', lat:37.9780, lng:23.7040 }
+  ];
   // Maximum distance (meters) at which the heart is allowed to appear at all,
   // even if you're pointing straight at it. Adjust as needed.
-  const REVEAL_RADIUS_M = 40;
+  const REVEAL_RADIUS_M = 25;
 
   let curLat=null, curLng=null, heading=null;
   let currentBeta=null, baselineBeta=90; // fixed pitch baseline — heart hangs at eye level
   let debugOn=false, heartVisible=false;
+  let activeTarget=null; // the nearest target, chosen once we have a first location fix
 
   function toRad(d){ return d*Math.PI/180; }
   function toDeg(r){ return r*180/Math.PI; }
@@ -183,6 +194,16 @@
     return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
   }
 
+  function pickNearestTarget(){
+    if(curLat==null) return null;
+    let best=null, bestDist=Infinity;
+    for(const t of TARGETS){
+      const d=distanceTo(curLat,curLng,t.lat,t.lng);
+      if(d<bestDist){ bestDist=d; best=t; }
+    }
+    return best;
+  }
+
   async function initCamera(){
     try{
       const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});
@@ -194,6 +215,10 @@
     if(!navigator.geolocation){ return; }
     navigator.geolocation.watchPosition(pos=>{
       curLat=pos.coords.latitude; curLng=pos.coords.longitude;
+      if(!activeTarget){
+        activeTarget=pickNearestTarget();
+        renderClaimState(); // now that we know the target, (re)render the claim/heart UI
+      }
       updateFrame();
     }, err=>{
       console.log("geo error", err);
@@ -234,7 +259,14 @@
   function afterSetupComplete(){
     topBar.style.display='block';
     debugToggle.style.display='block';
-    renderClaimState();
+    // Show a "locating you" placeholder until the first GPS fix picks a target.
+    if(!activeTarget){
+      app.innerHTML='';
+      distanceHint.style.display='block';
+      distanceHint.textContent='📡 Εντοπισμός τοποθεσίας…';
+    } else {
+      renderClaimState();
+    }
   }
   function needsMotionPermission(){
     return typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function';
@@ -250,31 +282,34 @@
   $('motionBtn').addEventListener('click', enableCompass);
 
   function renderClaimState(){
-    const claimed=store('priamos_claimed');
-    const revealed=store('priamos_revealed');
+    if(!activeTarget) return;
+    const claimKey='priamos_claimed_'+activeTarget.id;
+    const revealKey='priamos_revealed_'+activeTarget.id;
+    const claimed=store(claimKey);
+    const revealed=store(revealKey);
     if(claimed){
       app.innerHTML='';
       showModal(`
         <div style="font-size:50px;margin-bottom:10px;">🖤</div>
         <h1>Η καρδιά έφυγε!</h1>
-        <p style="color:#aaa;">Κάποιος άλλος την εντόπισε πρώτος. Η δράση ολοκληρώθηκε.</p>
+        <p style="color:#aaa;">Κάποιος άλλος εντόπισε πρώτος την καρδιά στο ${activeTarget.name}. Η δράση ολοκληρώθηκε εκεί.</p>
       `);
       topBar.style.display='none';
     } else if(revealed){
       showModal(`
         <div style="font-size:40px;margin-bottom:6px;">🎉</div>
         <h1>Την βρήκες!</h1>
-        <p>Ήσουν ο τυχερός που εντόπισε την κρυφή καρδιά στο Hotel Priamos!</p>
+        <p>Ήσουν ο τυχερός που εντόπισε την κρυφή καρδιά στο ${activeTarget.name}!</p>
         <div class="code-box">PRIAMOS-HEART-01</div>
         <p style="font-weight:bold;color:var(--pink);">Κέρδισες 35% έκπτωση σε όλα τα δωμάτια του Priamos Boutique!</p>
         <p style="font-size:12px;color:var(--pink-soft);margin-bottom:0;">Δείξε αυτή την οθόνη στη ρεσεψιόν.</p>
       `);
-      setStore('priamos_claimed','true');
+      setStore(claimKey,'true');
       topBar.style.display='none';
     } else {
       app.innerHTML=`<div class="spatial-heart" id="spatialHeart"><div class="heart-icon">❤️</div></div>`;
       $('spatialHeart').addEventListener('click', function(){
-        setStore('priamos_revealed','true');
+        setStore(revealKey,'true');
         renderClaimState();
       });
     }
@@ -288,9 +323,9 @@
   }
 
   function updateFrame(){
-    if(heading==null || curLat==null) return;
-    const bearing=bearingTo(curLat,curLng,TARGET_LAT,TARGET_LNG);
-    const dist=distanceTo(curLat,curLng,TARGET_LAT,TARGET_LNG);
+    if(heading==null || curLat==null || !activeTarget) return;
+    const bearing=bearingTo(curLat,curLng,activeTarget.lat,activeTarget.lng);
+    const dist=distanceTo(curLat,curLng,activeTarget.lat,activeTarget.lng);
     let diff=((bearing-heading+540)%360)-180;
 
     let topPct=50;
@@ -303,6 +338,7 @@
 
     if(debugOn){
       debugPanel.innerHTML=
+        `target: ${activeTarget.name}<br>`+
         `bearing: ${bearing.toFixed(1)}°<br>`+
         `heading: ${heading.toFixed(1)}°<br>`+
         `diff: ${diff.toFixed(1)}°<br>`+
@@ -314,7 +350,7 @@
     distanceHint.style.display='block';
     if(dist > REVEAL_RADIUS_M){
       const arrow = diff < 0 ? '◀' : '▶';
-      distanceHint.textContent = `${arrow} Πλησίασε την καρδιά — ${Math.round(dist)}μ`;
+      distanceHint.textContent = `${arrow} ${activeTarget.name} — ${Math.round(dist)}μ`;
     } else {
       distanceHint.textContent = `📍 ${Math.round(dist)}μ — είσαι κοντά, γύρνα το κινητό`;
     }
@@ -350,7 +386,9 @@
   });
 
   $('resetBtn').addEventListener('click', function(){
-    delStore('priamos_claimed'); delStore('priamos_revealed');
+    for(const t of TARGETS){
+      delStore('priamos_claimed_'+t.id); delStore('priamos_revealed_'+t.id);
+    }
     location.reload();
   });
 })();
