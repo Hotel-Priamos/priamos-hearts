@@ -169,7 +169,8 @@
     { id:'moschato', name:'Μοσχάτο — Λεωφ. Ποσειδώνος 53 & Πλάτωνος 1', lat:37.9440, lng:23.6743 },
     { id:'metamorfosi', name:'Μεταμόρφωση — Ελ. Βενιζέλου 22 & Τατοΐου', lat:38.0620, lng:23.7480 },
     { id:'ilioupoli', name:'Ηλιούπολη — Λεωφ. Βουλιαγμένης 352', lat:37.9280, lng:23.7570 },
-    { id:'gazi', name:'Γκάζι — Ηρακλειδών 72', lat:37.9780, lng:23.7040 }
+    { id:'gazi', name:'Γκάζι — Ηρακλειδών 72', lat:37.9780, lng:23.7040 },
+    { id:'argyroupoli', name:'Αργυρούπολη — Μαρίνου Αντύπα 585', lat:37.9138726, lng:23.7449097 }
   ];
   // Maximum distance (meters) at which the heart is allowed to appear at all,
   // even if you're pointing straight at it. Adjust as needed.
@@ -350,9 +351,9 @@
     distanceHint.style.display='block';
     if(dist > REVEAL_RADIUS_M){
       const arrow = diff < 0 ? '◀' : '▶';
-      distanceHint.textContent = `${arrow} ${activeTarget.name} — ${Math.round(dist)}μ`;
+      distanceHint.textContent = `${arrow} Πλησίασε — ${Math.round(dist)}μ`;
     } else {
-      distanceHint.textContent = `📍 ${Math.round(dist)}μ — είσαι κοντά, γύρνα το κινητό`;
+      distanceHint.textContent = `📍 ${Math.round(dist)}μ — είσαι πολύ κοντά, γύρνα το κινητό`;
     }
 
     const heartEl=document.getElementById('spatialHeart');
