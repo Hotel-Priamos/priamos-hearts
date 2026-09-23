@@ -158,9 +158,9 @@
   const setStore = (k,v) => { try { localStorage.setItem(k,v); } catch(e){} };
   const delStore = k => { try { localStorage.removeItem(k); } catch(e){} };
 
-  // --- Fixed target: Μαρίνου Αντύπα & Εθνάρχου Μακαρίου, Αργυρούπολη 164 52 ---
-  const TARGET_LAT = 37.9134487;
-  const TARGET_LNG = 23.7450509;
+  // --- Fixed target: Μαρίνου Αντύπα 585, Αργυρούπολη 164 52 ---
+  const TARGET_LAT = 37.9138726;
+  const TARGET_LNG = 23.7449097;
   // Maximum distance (meters) at which the heart is allowed to appear at all,
   // even if you're pointing straight at it. Adjust as needed.
   const REVEAL_RADIUS_M = 40;
@@ -321,24 +321,20 @@
     const heartEl=document.getElementById('spatialHeart');
     const withinFOV = Math.abs(diff) <= FOV/2;
     const withinRange = dist <= REVEAL_RADIUS_M;
-    const shouldShow = withinFOV && withinRange;
+    const shouldShow = withinFOV && withinRange && !!heartEl;
 
-    if(heartEl){
-      if(shouldShow){
-        const pct=50 + (diff/(FOV/2))*42;
-        heartEl.style.left=pct+'%';
-        heartEl.style.top=topPct+'%';
-        heartEl.classList.add('visible');
-        hintLeft.classList.remove('show'); hintRight.classList.remove('show');
-        heartVisible=true;
-      } else {
-        heartEl.classList.remove('visible');
-        heartVisible=false;
-        // Show a direction arrow regardless of distance, so the user always
-        // knows which way to turn/walk — not just once they're already close.
-        if(diff<0){ hintLeft.classList.add('show'); hintRight.classList.remove('show'); }
-        else{ hintRight.classList.add('show'); hintLeft.classList.remove('show'); }
-      }
+    if(shouldShow){
+      const pct=50 + (diff/(FOV/2))*42;
+      heartEl.style.left=pct+'%';
+      heartEl.style.top=topPct+'%';
+      heartEl.classList.add('visible');
+      hintLeft.classList.remove('show'); hintRight.classList.remove('show');
+      heartVisible=true;
+    } else {
+      if(heartEl) heartEl.classList.remove('visible');
+      heartVisible=false;
+      if(diff<0){ hintLeft.classList.add('show'); hintRight.classList.remove('show'); }
+      else{ hintRight.classList.add('show'); hintLeft.classList.remove('show'); }
     }
   }
 
