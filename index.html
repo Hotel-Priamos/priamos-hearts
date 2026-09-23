@@ -54,6 +54,14 @@
   .direction-hint.right{ right:18px; }
   .direction-hint.show{ opacity:1; }
 
+  .distance-hint{
+    position:fixed; bottom: calc(60px + env(safe-area-inset-bottom,0px)); left:50%;
+    transform:translateX(-50%);
+    background:rgba(0,0,0,.7); color:var(--pink-soft);
+    padding:7px 16px; border-radius:16px; font-size:12px;
+    z-index:15; pointer-events:none; display:none;
+  }
+
   .top-bar{
     position:fixed; top: calc(16px + env(safe-area-inset-top,0px)); left:50%;
     transform:translateX(-50%);
@@ -113,7 +121,7 @@
   <div class="panel" id="startScreen">
     <div style="font-size:54px;margin-bottom:12px;">❤️</div>
     <h1>Hotel Priamos — Δοκιμή AR</h1>
-    <p>Θα χρειαστεί άδεια για κάμερα, τοποθεσία και πυξίδα. Η καρδιά θα "κρέμεται" σε ένα σημείο στον πραγματικό χώρο — θα φαίνεται μόνο όταν στοχεύεις το κινητό προς τα εκεί.</p>
+    <p>Θα χρειαστεί άδεια για κάμερα, τοποθεσία και πυξίδα. Η καρδιά "κρέμεται" σε συγκεκριμένο σημείο στον πραγματικό χώρο — θα φαίνεται μόνο όταν πλησιάσεις εκεί και στοχεύεις το κινητό προς τα εκεί.</p>
     <button class="btn" id="startBtn">Εκκίνηση</button>
   </div>
 
@@ -124,17 +132,10 @@
     <button class="btn" id="motionBtn">Ενεργοποίηση</button>
   </div>
 
-  <div class="panel" id="setTargetScreen" style="display:none;">
-    <div style="font-size:44px;margin-bottom:10px;">📍</div>
-    <h1>Ορισμός σημείου (test)</h1>
-    <p>Δεν υπάρχει αποθηκευμένο σημείο-στόχος. Στάσου εκεί όπου θέλεις να "κρέμεται" η καρδιά, κράτα το κινητό στη γωνία που θέλεις να τη βλέπεις, και πάτα το κουμπί.</p>
-    <p id="geoStatus" style="color:#888;font-size:12px;">Εντοπισμός τοποθεσίας…</p>
-    <button class="btn" id="setTargetBtn" disabled>Όρισε το σημείο εδώ</button>
-  </div>
-
   <div class="camera-container"><video id="webcam" autoplay playsinline muted></video></div>
 
-  <div class="top-bar" id="topBar" style="display:none;">🎯 Γύρνα το κινητό γύρω-γύρω για να βρεις την καρδιά</div>
+  <div class="top-bar" id="topBar" style="display:none;">🎯 Πλησίασε το σημείο και γύρνα το κινητό γύρω-γύρω</div>
+  <div class="distance-hint" id="distanceHint"></div>
 
   <div class="ui-layer" id="app"></div>
   <div class="direction-hint left" id="hintLeft">◀</div>
@@ -147,18 +148,25 @@
 <script>
 (function(){
   const $ = id => document.getElementById(id);
-  const startScreen = $('startScreen'), motionScreen = $('motionScreen'), setTargetScreen = $('setTargetScreen');
+  const startScreen = $('startScreen'), motionScreen = $('motionScreen');
   const app = $('app'), topBar = $('topBar'), video = $('webcam');
-  const hintLeft = $('hintLeft'), hintRight = $('hintRight');
-  const debugToggle = $('debugToggle'), debugPanel = $('debugPanel'), geoStatus = $('geoStatus'), setTargetBtn = $('setTargetBtn');
+  const hintLeft = $('hintLeft'), hintRight = $('hintRight'), distanceHint = $('distanceHint');
+  const debugToggle = $('debugToggle'), debugPanel = $('debugPanel');
 
   const FOV = 50;
   const store = k => { try { return localStorage.getItem(k); } catch(e){ return null; } };
   const setStore = (k,v) => { try { localStorage.setItem(k,v); } catch(e){} };
   const delStore = k => { try { localStorage.removeItem(k); } catch(e){} };
 
-  let curLat=null, curLng=null, targetLat=null, targetLng=null, heading=null;
-  let currentBeta=null, baselineBeta=null;
+  // --- Fixed target: Μαρίνου Αντύπα & Εθνάρχου Μακαρίου, Αργυρούπολη 164 52 ---
+  const TARGET_LAT = 37.9134487;
+  const TARGET_LNG = 23.7450509;
+  // Maximum distance (meters) at which the heart is allowed to appear at all,
+  // even if you're pointing straight at it. Adjust as needed.
+  const REVEAL_RADIUS_M = 40;
+
+  let curLat=null, curLng=null, heading=null;
+  let currentBeta=null, baselineBeta=90; // fixed pitch baseline — heart hangs at eye level
   let debugOn=false, heartVisible=false;
 
   function toRad(d){ return d*Math.PI/180; }
@@ -183,14 +191,12 @@
   }
 
   function startGeo(){
-    if(!navigator.geolocation){ geoStatus.textContent="Το κινητό δεν υποστηρίζει τοποθεσία."; return; }
+    if(!navigator.geolocation){ return; }
     navigator.geolocation.watchPosition(pos=>{
       curLat=pos.coords.latitude; curLng=pos.coords.longitude;
-      if(geoStatus) geoStatus.textContent="Τοποθεσία βρέθηκε ✓ (ακρίβεια ~"+Math.round(pos.coords.accuracy)+"μ)";
-      if(setTargetBtn) setTargetBtn.disabled=false;
       updateFrame();
     }, err=>{
-      if(geoStatus) geoStatus.textContent="Δεν δόθηκε άδεια τοποθεσίας — δοκίμασε εξωτερικό browser.";
+      console.log("geo error", err);
     }, {enableHighAccuracy:true, maximumAge:1000, timeout:15000});
   }
 
@@ -221,29 +227,9 @@
     }
   }
 
-  function loadTarget(){
-    const lat=store('priamos_target_lat'), lng=store('priamos_target_lng');
-    const beta=store('priamos_target_beta');
-    if(lat && lng){
-      targetLat=parseFloat(lat); targetLng=parseFloat(lng);
-      baselineBeta = (beta!==null) ? parseFloat(beta) : 90;
-      return true;
-    }
-    return false;
-  }
-  function setTargetHere(){
-    if(curLat==null){ alert('Περίμενε λίγο να εντοπιστεί η τοποθεσία σου.'); return; }
-    setStore('priamos_target_lat', curLat); setStore('priamos_target_lng', curLng);
-    if(currentBeta!==null){ setStore('priamos_target_beta', currentBeta); baselineBeta=currentBeta; }
-    targetLat=curLat; targetLng=curLng;
-    setTargetScreen.style.display='none';
-    afterSetupComplete();
-  }
-
   function afterMotionGranted(){
     motionScreen.style.display='none';
-    if(loadTarget()){ afterSetupComplete(); }
-    else{ setTargetScreen.style.display='flex'; }
+    afterSetupComplete();
   }
   function afterSetupComplete(){
     topBar.style.display='block';
@@ -262,7 +248,6 @@
     else{ addOrientationListeners(); afterMotionGranted(); }
   });
   $('motionBtn').addEventListener('click', enableCompass);
-  setTargetBtn.addEventListener('click', setTargetHere);
 
   function renderClaimState(){
     const claimed=store('priamos_claimed');
@@ -303,13 +288,13 @@
   }
 
   function updateFrame(){
-    if(targetLat==null || heading==null || curLat==null) return;
-    const bearing=bearingTo(curLat,curLng,targetLat,targetLng);
-    const dist=distanceTo(curLat,curLng,targetLat,targetLng);
+    if(heading==null || curLat==null) return;
+    const bearing=bearingTo(curLat,curLng,TARGET_LAT,TARGET_LNG);
+    const dist=distanceTo(curLat,curLng,TARGET_LAT,TARGET_LNG);
     let diff=((bearing-heading+540)%360)-180;
 
     let topPct=50;
-    if(currentBeta!==null && baselineBeta!==null){
+    if(currentBeta!==null){
       const maxPitch=40;
       let deltaUp = baselineBeta - currentBeta;
       deltaUp = Math.max(-maxPitch, Math.min(maxPitch, deltaUp));
@@ -321,15 +306,24 @@
         `bearing: ${bearing.toFixed(1)}°<br>`+
         `heading: ${heading.toFixed(1)}°<br>`+
         `diff: ${diff.toFixed(1)}°<br>`+
-        `beta: ${currentBeta!==null?currentBeta.toFixed(1):'-'}° (base ${baselineBeta!==null?baselineBeta.toFixed(1):'-'}°)<br>`+
+        `beta: ${currentBeta!==null?currentBeta.toFixed(1):'-'}°<br>`+
         `distance: ${dist.toFixed(1)} m`;
     }
 
+    if(dist > REVEAL_RADIUS_M){
+      distanceHint.style.display='block';
+      distanceHint.textContent = `📍 ${Math.round(dist)}μ μακριά — πλησίασε το σημείο`;
+    } else {
+      distanceHint.style.display='none';
+    }
+
     const heartEl=document.getElementById('spatialHeart');
-    const withinFOV=Math.abs(diff) <= FOV/2;
+    const withinFOV = Math.abs(diff) <= FOV/2;
+    const withinRange = dist <= REVEAL_RADIUS_M;
+    const shouldShow = withinFOV && withinRange;
 
     if(heartEl){
-      if(withinFOV){
+      if(shouldShow){
         const pct=50 + (diff/(FOV/2))*42;
         heartEl.style.left=pct+'%';
         heartEl.style.top=topPct+'%';
@@ -339,8 +333,12 @@
       } else {
         heartEl.classList.remove('visible');
         heartVisible=false;
-        if(diff<0){ hintLeft.classList.add('show'); hintRight.classList.remove('show'); }
-        else{ hintRight.classList.add('show'); hintLeft.classList.remove('show'); }
+        if(withinRange){
+          if(diff<0){ hintLeft.classList.add('show'); hintRight.classList.remove('show'); }
+          else{ hintRight.classList.add('show'); hintLeft.classList.remove('show'); }
+        } else {
+          hintLeft.classList.remove('show'); hintRight.classList.remove('show');
+        }
       }
     }
   }
@@ -352,8 +350,6 @@
 
   $('resetBtn').addEventListener('click', function(){
     delStore('priamos_claimed'); delStore('priamos_revealed');
-    delStore('priamos_target_lat'); delStore('priamos_target_lng');
-    targetLat=null; targetLng=null;
     location.reload();
   });
 })();
