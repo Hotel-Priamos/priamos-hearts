@@ -164,13 +164,16 @@
   // Before going live, verify/adjust each lat/lng by dropping a pin on the exact
   // spot in Google Maps and copying the coordinates shown in the URL — accuracy
   // matters a lot here since REVEAL_RADIUS_M is only 25 meters.
+  // "property" is the hotel/property name shown to the winner; "name" is the
+  // internal address label (debug panel only) — Argyroupoli intentionally
+  // shows its address as the "property" text too, per request.
   const TARGETS = [
-    { id:'pagkrati', name:'Παγκράτι — Φωκιανού 26', lat:37.9663, lng:23.7452 },
-    { id:'moschato', name:'Μοσχάτο — Λεωφ. Ποσειδώνος 53 & Πλάτωνος 1', lat:37.9440, lng:23.6743 },
-    { id:'metamorfosi', name:'Μεταμόρφωση — Ελ. Βενιζέλου 22 & Τατοΐου', lat:38.0620, lng:23.7480 },
-    { id:'ilioupoli', name:'Ηλιούπολη — Λεωφ. Βουλιαγμένης 352', lat:37.9280, lng:23.7570 },
-    { id:'gazi', name:'Γκάζι — Ηρακλειδών 72', lat:37.9780, lng:23.7040 },
-    { id:'argyroupoli', name:'Αργυρούπολη — Μαρίνου Αντύπα 585', lat:37.9138726, lng:23.7449097 }
+    { id:'pagkrati', name:'Παγκράτι — Φωκιανού 26', lat:37.9663, lng:23.7452, property:'Priamos' },
+    { id:'moschato', name:'Μοσχάτο — Λεωφ. Ποσειδώνος 53 & Πλάτωνος 1', lat:37.9440, lng:23.6743, property:'Priamos GLS' },
+    { id:'metamorfosi', name:'Μεταμόρφωση — Ελ. Βενιζέλου 22 & Τατοΐου', lat:38.0620, lng:23.7480, property:'Priamos Cinema' },
+    { id:'ilioupoli', name:'Ηλιούπολη — Λεωφ. Βουλιαγμένης 352', lat:37.9280, lng:23.7570, property:'Priamos Boutique' },
+    { id:'gazi', name:'Γκάζι — Ηρακλειδών 72', lat:37.9780, lng:23.7040, property:'Priamos Ερατώ' },
+    { id:'argyroupoli', name:'Αργυρούπολη — Μαρίνου Αντύπα 585', lat:37.9138726, lng:23.7449097, property:'Αργυρούπολη — Μαρίνου Αντύπα 585' }
   ];
   // Maximum distance (meters) at which the heart is allowed to appear at all,
   // even if you're pointing straight at it. Adjust as needed.
@@ -293,14 +296,14 @@
       showModal(`
         <div style="font-size:50px;margin-bottom:10px;">🖤</div>
         <h1>Η καρδιά έφυγε!</h1>
-        <p style="color:#aaa;">Κάποιος άλλος εντόπισε πρώτος την καρδιά στο ${activeTarget.name}. Η δράση ολοκληρώθηκε εκεί.</p>
+        <p style="color:#aaa;">Κάποιος άλλος εντόπισε πρώτος την καρδιά στο ${activeTarget.property}. Η δράση ολοκληρώθηκε εκεί.</p>
       `);
       topBar.style.display='none';
     } else if(revealed){
       showModal(`
         <div style="font-size:40px;margin-bottom:6px;">🎉</div>
         <h1>Την βρήκες!</h1>
-        <p>Ήσουν ο τυχερός που εντόπισε την κρυφή καρδιά στο ${activeTarget.name}!</p>
+        <p>Ήσουν ο τυχερός που εντόπισε την κρυφή καρδιά στο ${activeTarget.property}!</p>
         <div class="code-box">PRIAMOS-HEART-01</div>
         <p style="font-weight:bold;color:var(--pink);">Κέρδισες 35% έκπτωση σε όλα τα δωμάτια του Priamos Boutique!</p>
         <p style="font-size:12px;color:var(--pink-soft);margin-bottom:0;">Δείξε αυτή την οθόνη στη ρεσεψιόν.</p>
