@@ -312,7 +312,8 @@
 
     if(dist > REVEAL_RADIUS_M){
       distanceHint.style.display='block';
-      distanceHint.textContent = `📍 ${Math.round(dist)}μ μακριά — πλησίασε το σημείο`;
+      const arrow = diff < 0 ? '◀' : '▶';
+      distanceHint.textContent = `${arrow} ${Math.round(dist)}μ μακριά — ακολούθησε το βέλος`;
     } else {
       distanceHint.style.display='none';
     }
@@ -333,12 +334,10 @@
       } else {
         heartEl.classList.remove('visible');
         heartVisible=false;
-        if(withinRange){
-          if(diff<0){ hintLeft.classList.add('show'); hintRight.classList.remove('show'); }
-          else{ hintRight.classList.add('show'); hintLeft.classList.remove('show'); }
-        } else {
-          hintLeft.classList.remove('show'); hintRight.classList.remove('show');
-        }
+        // Show a direction arrow regardless of distance, so the user always
+        // knows which way to turn/walk — not just once they're already close.
+        if(diff<0){ hintLeft.classList.add('show'); hintRight.classList.remove('show'); }
+        else{ hintRight.classList.add('show'); hintLeft.classList.remove('show'); }
       }
     }
   }
