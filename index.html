@@ -159,6 +159,11 @@
   const setStore = (k,v) => { try { localStorage.setItem(k,v); } catch(e){} };
   const delStore = k => { try { localStorage.removeItem(k); } catch(e){} };
 
+  // Google Apps Script Web App URL (see apps-script-code.gs for setup).
+  // This is the central counter — it, not localStorage, decides whether a
+  // claim succeeds, so the "2/day/location" limit holds across every device.
+  const BACKEND_URL = 'ΒΑΛΕ_ΕΔΩ_ΤΟ_WEB_APP_URL_ΣΟΥ';
+
   // Local-date key (YYYY-M-D) so the "2 hearts per location per day" limit
   // resets automatically at midnight, device-local time.
   function todayKey(){
@@ -174,15 +179,15 @@
   // "property" is the hotel/property name shown to the winner and in INFO;
   // "name" is the internal address label — Argyroupoli intentionally shows
   // its address as the "property" text too, per request.
-  // "codes" = [first-heart-code, second-heart-code] for that location, up to
-  // 2 wins/day per location.
+  // Prize codes are NOT listed here anymore — they live only in the backend
+  // (apps-script-code.gs), so they can't be read from the page's source.
   const TARGETS = [
-    { id:'pagkrati', name:'Παγκράτι — Φωκιανού 26', lat:37.9663, lng:23.7452, property:'Priamos', codes:['PRIAMOS-ΗΠ1','PRIAMOS-ΗΠ2'] },
-    { id:'moschato', name:'Μοσχάτο — Λεωφ. Ποσειδώνος 53 & Πλάτωνος 1', lat:37.9440, lng:23.6743, property:'Priamos GLS', codes:['PRIAMOS-HG1','PRIAMOS-HG2'] },
-    { id:'metamorfosi', name:'Μεταμόρφωση — Ελ. Βενιζέλου 22 & Τατοΐου', lat:38.0620, lng:23.7480, property:'Priamos Cinema', codes:['PRIAMOS-ΗC1','PRIAMOS-ΗC2'] },
-    { id:'ilioupoli', name:'Ηλιούπολη — Λεωφ. Βουλιαγμένης 352', lat:37.9280, lng:23.7570, property:'Priamos Boutique', codes:['PRIAMOS-HB1','PRIAMOS-HB2'] },
-    { id:'gazi', name:'Γκάζι — Ηρακλειδών 72', lat:37.9780, lng:23.7040, property:'Priamos Ερατώ', codes:['PRIAMOS-ΗΕ1','PRIAMOS-ΗΕ2'] },
-    { id:'argyroupoli', name:'Αργυρούπολη — Μαρίνου Αντύπα 585', lat:37.9138726, lng:23.7449097, property:'Αργυρούπολη — Μαρίνου Αντύπα 585', codes:['PRIAMOS-HEART-01','PRIAMOS-HEART-02'] }
+    { id:'pagkrati', name:'Παγκράτι — Φωκιανού 26', lat:37.9663, lng:23.7452, property:'Priamos' },
+    { id:'moschato', name:'Μοσχάτο — Λεωφ. Ποσειδώνος 53 & Πλάτωνος 1', lat:37.9440, lng:23.6743, property:'Priamos GLS' },
+    { id:'metamorfosi', name:'Μεταμόρφωση — Ελ. Βενιζέλου 22 & Τατοΐου', lat:38.0620, lng:23.7480, property:'Priamos Cinema' },
+    { id:'ilioupoli', name:'Ηλιούπολη — Λεωφ. Βουλιαγμένης 352', lat:37.9280, lng:23.7570, property:'Priamos Boutique' },
+    { id:'gazi', name:'Γκάζι — Ηρακλειδών 72', lat:37.9780, lng:23.7040, property:'Priamos Ερατώ' },
+    { id:'argyroupoli', name:'Αργυρούπολη — Μαρίνου Αντύπα 585', lat:37.9138726, lng:23.7449097, property:'Αργυρούπολη — Μαρίνου Αντύπα 585' }
   ];
   // Maximum distance (meters) at which the heart is allowed to appear at all,
   // even if you're pointing straight at it. Adjust as needed.
@@ -296,38 +301,21 @@
   });
   $('motionBtn').addEventListener('click', enableCompass);
 
-  // --- Daily win-count + per-device "already won today" tracking ---
-  function countKey(target){ return 'priamos_count_'+target.id+'_'+todayKey(); }
+  // --- Daily win-count + per-device caching (cache only — the backend
+  // decides who actually wins; localStorage here is just for fast redisplay
+  // of your own result if you reopen the app the same day). ---
   function wonKey(target){ return 'priamos_won_'+target.id+'_'+todayKey(); }
+  function soldOutKey(target){ return 'priamos_soldout_'+target.id+'_'+todayKey(); }
 
   function renderClaimState(){
     if(!activeTarget) return;
-    const cKey = countKey(activeTarget);
-    const wKey = wonKey(activeTarget);
-    const wonCode = store(wKey);
-    const count = parseInt(store(cKey) || '0', 10);
+    const wonCode = store(wonKey(activeTarget));
+    const soldOut = store(soldOutKey(activeTarget));
 
     if(wonCode){
-      // This device already won a heart at this location today.
-      app.innerHTML='';
-      showModal(`
-        <div style="font-size:40px;margin-bottom:6px;">🎉</div>
-        <h1>Την βρήκες!</h1>
-        <p>Ήσουν ο τυχερός που εντόπισε την κρυφή καρδιά στο ${activeTarget.property}!</p>
-        <div class="code-box">${wonCode}</div>
-        <p style="font-weight:bold;color:var(--pink);">Κέρδισες 35% έκπτωση σε όλα τα δωμάτια του ${activeTarget.property}!</p>
-        <p style="font-size:12px;color:var(--pink-soft);margin-bottom:0;">Δείξε αυτή την οθόνη στη ρεσεψιόν.</p>
-      `);
-      topBar.style.display='none';
-    } else if(count >= MAX_DAILY_WINS){
-      // Both of today's hearts at this location are already claimed.
-      app.innerHTML='';
-      showModal(`
-        <div style="font-size:50px;margin-bottom:10px;">🖤</div>
-        <h1>Οι καρδιές τελείωσαν</h1>
-        <p style="color:#aaa;">Λυπούμαστε, οι καρδιές του ${activeTarget.property} τελείωσαν για σήμερα. Δοκίμασε ξανά αύριο!</p>
-      `);
-      topBar.style.display='none';
+      showWinScreen(wonCode);
+    } else if(soldOut){
+      showSoldOutScreen();
     } else {
       app.innerHTML=`<div class="spatial-heart" id="spatialHeart"><div class="heart-icon">❤️</div></div>`;
       $('spatialHeart').addEventListener('click', function(){
@@ -336,20 +324,65 @@
     }
   }
 
-  function claimHeart(target){
-    const cKey = countKey(target);
-    const wKey = wonKey(target);
-    // Re-read the count right before claiming in case it changed.
-    let count = parseInt(store(cKey) || '0', 10);
-    if(count >= MAX_DAILY_WINS){
-      renderClaimState(); // someone/something else already used up today's hearts
-      return;
+  function showWinScreen(code){
+    app.innerHTML='';
+    showModal(`
+      <div style="font-size:40px;margin-bottom:6px;">🎉</div>
+      <h1>Την βρήκες!</h1>
+      <p>Ήσουν ο τυχερός που εντόπισε την κρυφή καρδιά στο ${activeTarget.property}!</p>
+      <div class="code-box">${code}</div>
+      <p style="font-weight:bold;color:var(--pink);">Κέρδισες 35% έκπτωση σε όλα τα δωμάτια του ${activeTarget.property}!</p>
+      <p style="font-size:12px;color:var(--pink-soft);margin-bottom:0;">Δείξε αυτή την οθόνη στη ρεσεψιόν.</p>
+    `);
+    topBar.style.display='none';
+  }
+
+  function showSoldOutScreen(){
+    app.innerHTML='';
+    showModal(`
+      <div style="font-size:50px;margin-bottom:10px;">🖤</div>
+      <h1>Οι καρδιές τελείωσαν</h1>
+      <p style="color:#aaa;">Λυπούμαστε, οι καρδιές του ${activeTarget.property} τελείωσαν για σήμερα. Δοκίμασε ξανά αύριο!</p>
+    `);
+    topBar.style.display='none';
+  }
+
+  function showErrorScreen(){
+    showModal(`
+      <div style="font-size:44px;margin-bottom:10px;">⚠️</div>
+      <h1>Κάτι πήγε στραβά</h1>
+      <p style="color:#aaa;">Δεν μπορέσαμε να επικοινωνήσουμε με τον server. Έλεγξε τη σύνδεσή σου και ξαναπροσπάθησε.</p>
+      <button class="btn" id="errorRetryBtn">Ξαναδοκίμασε</button>
+    `);
+    $('errorRetryBtn').addEventListener('click', function(){
+      const existing=document.querySelector('.panel.result'); if(existing) existing.remove();
+      renderClaimState();
+    });
+  }
+
+  async function claimHeart(target){
+    // Optimistic "checking" state while we wait for the server.
+    app.innerHTML=`<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:15px;color:var(--pink-soft);">⏳ Έλεγχος…</div>`;
+    try{
+      const res = await fetch(BACKEND_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight on Apps Script
+        body: JSON.stringify({ locationId: target.id, dateKey: todayKey() })
+      });
+      const data = await res.json();
+      if(data.success){
+        setStore(wonKey(target), data.code);
+        showWinScreen(data.code);
+      } else if(data.reason === 'sold_out'){
+        setStore(soldOutKey(target), 'true');
+        showSoldOutScreen();
+      } else {
+        showErrorScreen();
+      }
+    }catch(e){
+      console.log('claim error', e);
+      showErrorScreen();
     }
-    const code = target.codes[count]; // codes[0] for the 1st win today, codes[1] for the 2nd
-    count += 1;
-    setStore(cKey, String(count));
-    setStore(wKey, code);
-    renderClaimState();
   }
 
   function showModal(html){
@@ -375,8 +408,9 @@
     }
 
     if(debugOn){
-      const cKey = countKey(activeTarget);
-      const count = parseInt(store(cKey) || '0', 10);
+      const wonCode = store(wonKey(activeTarget));
+      const soldOut = store(soldOutKey(activeTarget));
+      const localState = wonCode ? ('κέρδισε: '+wonCode) : (soldOut ? 'sold out (cache)' : 'διαθέσιμη');
       debugPanel.innerHTML=
         `📍 ξενοδοχείο: ${activeTarget.property}<br>`+
         `bearing: ${bearing.toFixed(1)}°<br>`+
@@ -384,7 +418,7 @@
         `diff: ${diff.toFixed(1)}°<br>`+
         `beta: ${currentBeta!==null?currentBeta.toFixed(1):'-'}°<br>`+
         `distance: ${dist.toFixed(1)} m<br>`+
-        `καρδιές σήμερα: ${count}/${MAX_DAILY_WINS}`;
+        `κατάσταση (τοπικά): ${localState}`;
     }
 
     // Show a simple distance hint until you're within the reveal radius
