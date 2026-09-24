@@ -149,38 +149,23 @@
 <script>
 (function(){
   const $ = id => document.getElementById(id);
-  const startScreen = $('startScreen'), motionScreen = $('motionScreen');
-  const app = $('app'), topBar = $('topBar'), video = $('webcam');
-  const hintLeft = $('hintLeft'), hintRight = $('hintRight'), distanceHint = $('distanceHint');
-  const debugToggle = $('debugToggle'), debugPanel = $('debugPanel');
+  const startScreen = $('startScreen'), motionScreen =$('motionScreen');
+  const app = $('app'), topBar = $('topBar'), video =$('webcam');
+  const hintLeft = $('hintLeft'), hintRight = $('hintRight'), distanceHint =$('distanceHint');
+  const debugToggle = $('debugToggle'), debugPanel =$('debugPanel');
 
   const FOV = 50;
   const store = k => { try { return localStorage.getItem(k); } catch(e){ return null; } };
   const setStore = (k,v) => { try { localStorage.setItem(k,v); } catch(e){} };
   const delStore = k => { try { localStorage.removeItem(k); } catch(e){} };
 
-  // Google Apps Script Web App URL (see apps-script-code.gs for setup).
-  // This is the central counter — it, not localStorage, decides whether a
-  // claim succeeds, so the "2/day/location" limit holds across every device.
   const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbxmffDxXAz_SV6CxZpbVUdsHFOFnTe17fODjRbrAcUMOzvu-ZGxjKOuS8JdU4wtyzXpOQ/exec';
 
-  // Local-date key (YYYY-M-D) so the "2 hearts per location per day" limit
-  // resets automatically at midnight, device-local time.
   function todayKey(){
     const d = new Date();
     return d.getFullYear() + '-' + (d.getMonth()+1) + '-' + d.getDate();
   }
 
-  // --- Multiple target locations. Each user gets routed to whichever one is nearest to them. ---
-  // NOTE: coordinates below are best-effort estimates for these addresses.
-  // Before going live, verify/adjust each lat/lng by dropping a pin on the exact
-  // spot in Google Maps and copying the coordinates shown in the URL — accuracy
-  // matters a lot here since REVEAL_RADIUS_M is only 25 meters.
-  // "property" is the hotel/property name shown to the winner and in INFO;
-  // "name" is the internal address label — Argyroupoli intentionally shows
-  // its address as the "property" text too, per request.
-  // Prize codes are NOT listed here anymore — they live only in the backend
-  // (apps-script-code.gs), so they can't be read from the page's source.
   const TARGETS = [
     { id:'pagkrati', name:'Παγκράτι — Φωκιανού 26', lat:37.9663, lng:23.7452, property:'Priamos' },
     { id:'moschato', name:'Μοσχάτο — Λεωφ. Ποσειδώνος 53 & Πλάτωνος 1', lat:37.9440, lng:23.6743, property:'Priamos GLS' },
@@ -189,16 +174,14 @@
     { id:'gazi', name:'Γκάζι — Ηρακλειδών 72', lat:37.9780, lng:23.7040, property:'Priamos Ερατώ' },
     { id:'argyroupoli', name:'Αργυρούπολη — Μαρίνου Αντύπα 585', lat:37.9138726, lng:23.7449097, property:'Αργυρούπολη — Μαρίνου Αντύπα 585' }
   ];
-  // Maximum distance (meters) at which the heart is allowed to appear at all,
-  // even if you're pointing straight at it. Adjust as needed.
+  
   const REVEAL_RADIUS_M = 25;
-  // Max wins per location per day.
   const MAX_DAILY_WINS = 2;
 
   let curLat=null, curLng=null, heading=null;
-  let currentBeta=null, baselineBeta=90; // fixed pitch baseline — heart hangs at eye level
+  let currentBeta=null, baselineBeta=90;
   let debugOn=false, heartVisible=false;
-  let activeTarget=null; // the nearest target, chosen once we have a first location fix
+  let activeTarget=null;
 
   function toRad(d){ return d*Math.PI/180; }
   function toDeg(r){ return r*180/Math.PI; }
@@ -237,7 +220,7 @@
       curLat=pos.coords.latitude; curLng=pos.coords.longitude;
       if(!activeTarget){
         activeTarget=pickNearestTarget();
-        renderClaimState(); // now that we know the target, (re)render the claim/heart UI
+        renderClaimState();
       }
       updateFrame();
     }, err=>{
@@ -279,7 +262,6 @@
   function afterSetupComplete(){
     topBar.style.display='block';
     debugToggle.style.display='block';
-    // Show a "locating you" placeholder until the first GPS fix picks a target.
     if(!activeTarget){
       app.innerHTML='';
       distanceHint.style.display='block';
@@ -301,40 +283,46 @@
   });
   $('motionBtn').addEventListener('click', enableCompass);
 
-  // --- Daily win-count + per-device caching (cache only — the backend
-  // decides who actually wins; localStorage here is just for fast redisplay
-  // of your own result if you reopen the app the same day). ---
   function wonKey(target){ return 'priamos_won_'+target.id+'_'+todayKey(); }
   function soldOutKey(target){ return 'priamos_soldout_'+target.id+'_'+todayKey(); }
 
   function renderClaimState(){
     if(!activeTarget) return;
-    const wonCode = store(wonKey(activeTarget));
     const soldOut = store(soldOutKey(activeTarget));
 
-    if(wonCode){
-      showWinScreen(wonCode);
-    } else if(soldOut){
+    if(soldOut){
       showSoldOutScreen();
     } else {
       app.innerHTML=`<div class="spatial-heart" id="spatialHeart"><div class="heart-icon">❤️</div></div>`;
       $('spatialHeart').addEventListener('click', function(){
-        claimHeart(activeTarget);
+        const currentWonCode = store(wonKey(activeTarget));
+        if(currentWonCode){
+          showWinScreen(currentWonCode);
+        } else {
+          claimHeart(activeTarget);
+        }
       });
     }
   }
 
   function showWinScreen(code){
-    app.innerHTML='';
     showModal(`
       <div style="font-size:40px;margin-bottom:6px;">🎉</div>
       <h1>Την βρήκες!</h1>
       <p>Ήσουν ο τυχερός που εντόπισε την κρυφή καρδιά στο ${activeTarget.property}!</p>
       <div class="code-box">${code}</div>
       <p style="font-weight:bold;color:var(--pink);">Κέρδισες 35% έκπτωση σε όλα τα δωμάτια του ${activeTarget.property}!</p>
-      <p style="font-size:12px;color:var(--pink-soft);margin-bottom:0;">Δείξε αυτή την οθόνη στη ρεσεψιόν.</p>
+      <p style="font-size:12px;color:var(--pink-soft);margin-bottom:12px;">Δείξε αυτή την οθόνη στη ρεσεψιόν.</p>
+      <button class="btn secondary" id="closeModalBtn">Επιστροφή στην κάμερα</button>
     `);
-    topBar.style.display='none';
+    
+    const closeBtn = $('closeModalBtn');
+    if(closeBtn){
+      closeBtn.addEventListener('click', function(){
+        const existing = document.querySelector('.panel.result');
+        if(existing) existing.remove();
+      });
+    }
   }
 
   function showSoldOutScreen(){
@@ -361,12 +349,11 @@
   }
 
   async function claimHeart(target){
-    // Optimistic "checking" state while we wait for the server.
     app.innerHTML=`<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:15px;color:var(--pink-soft);">⏳ Έλεγχος…</div>`;
     try{
       const res = await fetch(BACKEND_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight on Apps Script
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ locationId: target.id, dateKey: todayKey() })
       });
       const data = await res.json();
@@ -421,7 +408,6 @@
         `κατάσταση (τοπικά): ${localState}`;
     }
 
-    // Show a simple distance hint until you're within the reveal radius
     distanceHint.style.display='block';
     if(dist > REVEAL_RADIUS_M){
       const arrow = diff < 0 ? '◀' : '▶';
@@ -447,9 +433,6 @@
     } else {
       if(heartEl) heartEl.classList.remove('visible');
       heartVisible=false;
-      // Direction arrows update independently of whether the heart element
-      // exists (e.g. if the "found/claimed" screen is showing instead),
-      // so they never silently stop working.
       if(diff<0){ hintLeft.classList.add('show'); hintRight.classList.remove('show'); }
       else{ hintRight.classList.add('show'); hintLeft.classList.remove('show'); }
     }
