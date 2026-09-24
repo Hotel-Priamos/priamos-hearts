@@ -129,7 +129,7 @@
   <div class="panel" id="motionScreen" style="display:none;">
     <div style="font-size:44px;margin-bottom:10px;">🧭</div>
     <h1>Ενεργοποίηση πυξίδας</h1>
-    <p>Το smartphone χρειάζεται ρητή άδεια για την πυξίδα. Πάτα το κουμπί και αποδέξου.</p>
+    <p>Το iPhone χρειάζεται ρητή άδεια για την πυξίδα. Πάτα το κουμπί και αποδέξου.</p>
     <button class="btn" id="motionBtn">Ενεργοποίηση</button>
   </div>
 
@@ -142,7 +142,7 @@
   <div class="direction-hint left" id="hintLeft">◀</div>
   <div class="direction-hint right" id="hintRight">▶</div>
 
-  <button class="debug-toggle" id="debugToggle" style="display:none;">🧪 Debug</button>
+  <button class="debug-toggle" id="debugToggle" style="display:none;">ℹ️ INFO</button>
   <div class="debug-panel" id="debugPanel"></div>
   <button class="reset-btn" id="resetBtn">🔄 Reset δοκιμής</button>
 
@@ -159,25 +159,36 @@
   const setStore = (k,v) => { try { localStorage.setItem(k,v); } catch(e){} };
   const delStore = k => { try { localStorage.removeItem(k); } catch(e){} };
 
+  // Local-date key (YYYY-M-D) so the "2 hearts per location per day" limit
+  // resets automatically at midnight, device-local time.
+  function todayKey(){
+    const d = new Date();
+    return d.getFullYear() + '-' + (d.getMonth()+1) + '-' + d.getDate();
+  }
+
   // --- Multiple target locations. Each user gets routed to whichever one is nearest to them. ---
   // NOTE: coordinates below are best-effort estimates for these addresses.
   // Before going live, verify/adjust each lat/lng by dropping a pin on the exact
   // spot in Google Maps and copying the coordinates shown in the URL — accuracy
   // matters a lot here since REVEAL_RADIUS_M is only 25 meters.
-  // "property" is the hotel/property name shown to the winner; "name" is the
-  // internal address label (debug panel only) — Argyroupoli intentionally
-  // shows its address as the "property" text too, per request.
+  // "property" is the hotel/property name shown to the winner and in INFO;
+  // "name" is the internal address label — Argyroupoli intentionally shows
+  // its address as the "property" text too, per request.
+  // "codes" = [first-heart-code, second-heart-code] for that location, up to
+  // 2 wins/day per location.
   const TARGETS = [
-    { id:'pagkrati', name:'Παγκράτι — Φωκιανού 26', lat:37.9663, lng:23.7452, property:'Priamos' },
-    { id:'moschato', name:'Μοσχάτο — Λεωφ. Ποσειδώνος 53 & Πλάτωνος 1', lat:37.9440, lng:23.6743, property:'Priamos GLS' },
-    { id:'metamorfosi', name:'Μεταμόρφωση — Ελ. Βενιζέλου 22 & Τατοΐου', lat:38.0620, lng:23.7480, property:'Priamos Cinema' },
-    { id:'ilioupoli', name:'Ηλιούπολη — Λεωφ. Βουλιαγμένης 352', lat:37.9280, lng:23.7570, property:'Priamos Boutique' },
-    { id:'gazi', name:'Γκάζι — Ηρακλειδών 72', lat:37.9780, lng:23.7040, property:'Priamos Ερατώ' },
-    { id:'argyroupoli', name:'Αργυρούπολη — Μαρίνου Αντύπα 585', lat:37.9138726, lng:23.7449097, property:'Αργυρούπολη — Μαρίνου Αντύπα 585' }
+    { id:'pagkrati', name:'Παγκράτι — Φωκιανού 26', lat:37.9663, lng:23.7452, property:'Priamos', codes:['PRIAMOS-ΗΠ1','PRIAMOS-ΗΠ2'] },
+    { id:'moschato', name:'Μοσχάτο — Λεωφ. Ποσειδώνος 53 & Πλάτωνος 1', lat:37.9440, lng:23.6743, property:'Priamos GLS', codes:['PRIAMOS-HG1','PRIAMOS-HG2'] },
+    { id:'metamorfosi', name:'Μεταμόρφωση — Ελ. Βενιζέλου 22 & Τατοΐου', lat:38.0620, lng:23.7480, property:'Priamos Cinema', codes:['PRIAMOS-ΗC1','PRIAMOS-ΗC2'] },
+    { id:'ilioupoli', name:'Ηλιούπολη — Λεωφ. Βουλιαγμένης 352', lat:37.9280, lng:23.7570, property:'Priamos Boutique', codes:['PRIAMOS-HB1','PRIAMOS-HB2'] },
+    { id:'gazi', name:'Γκάζι — Ηρακλειδών 72', lat:37.9780, lng:23.7040, property:'Priamos Ερατώ', codes:['PRIAMOS-ΗΕ1','PRIAMOS-ΗΕ2'] },
+    { id:'argyroupoli', name:'Αργυρούπολη — Μαρίνου Αντύπα 585', lat:37.9138726, lng:23.7449097, property:'Αργυρούπολη — Μαρίνου Αντύπα 585', codes:['PRIAMOS-HEART-01','PRIAMOS-HEART-02'] }
   ];
   // Maximum distance (meters) at which the heart is allowed to appear at all,
   // even if you're pointing straight at it. Adjust as needed.
   const REVEAL_RADIUS_M = 25;
+  // Max wins per location per day.
+  const MAX_DAILY_WINS = 2;
 
   let curLat=null, curLng=null, heading=null;
   let currentBeta=null, baselineBeta=90; // fixed pitch baseline — heart hangs at eye level
@@ -285,39 +296,62 @@
   });
   $('motionBtn').addEventListener('click', enableCompass);
 
+  // --- Daily win-count + per-device "already won today" tracking ---
+  function countKey(target){ return 'priamos_count_'+target.id+'_'+todayKey(); }
+  function wonKey(target){ return 'priamos_won_'+target.id+'_'+todayKey(); }
+
   function renderClaimState(){
     if(!activeTarget) return;
-    const claimKey='priamos_claimed_'+activeTarget.id;
-    const revealKey='priamos_revealed_'+activeTarget.id;
-    const claimed=store(claimKey);
-    const revealed=store(revealKey);
-    if(claimed){
+    const cKey = countKey(activeTarget);
+    const wKey = wonKey(activeTarget);
+    const wonCode = store(wKey);
+    const count = parseInt(store(cKey) || '0', 10);
+
+    if(wonCode){
+      // This device already won a heart at this location today.
       app.innerHTML='';
-      showModal(`
-        <div style="font-size:50px;margin-bottom:10px;">🖤</div>
-        <h1>Η καρδιά έφυγε!</h1>
-        <p style="color:#aaa;">Κάποιος άλλος εντόπισε πρώτος την καρδιά στο ${activeTarget.property}. Η δράση ολοκληρώθηκε εκεί.</p>
-      `);
-      topBar.style.display='none';
-    } else if(revealed){
       showModal(`
         <div style="font-size:40px;margin-bottom:6px;">🎉</div>
         <h1>Την βρήκες!</h1>
         <p>Ήσουν ο τυχερός που εντόπισε την κρυφή καρδιά στο ${activeTarget.property}!</p>
-        <div class="code-box">PRIAMOS-HEART-01</div>
-        <p style="font-weight:bold;color:var(--pink);">Κέρδισες 35% έκπτωση σε όλα τα δωμάτια του Priamos Boutique!</p>
+        <div class="code-box">${wonCode}</div>
+        <p style="font-weight:bold;color:var(--pink);">Κέρδισες 35% έκπτωση σε όλα τα δωμάτια του ${activeTarget.property}!</p>
         <p style="font-size:12px;color:var(--pink-soft);margin-bottom:0;">Δείξε αυτή την οθόνη στη ρεσεψιόν.</p>
       `);
-      setStore(claimKey,'true');
+      topBar.style.display='none';
+    } else if(count >= MAX_DAILY_WINS){
+      // Both of today's hearts at this location are already claimed.
+      app.innerHTML='';
+      showModal(`
+        <div style="font-size:50px;margin-bottom:10px;">🖤</div>
+        <h1>Οι καρδιές τελείωσαν</h1>
+        <p style="color:#aaa;">Λυπούμαστε, οι καρδιές του ${activeTarget.property} τελείωσαν για σήμερα. Δοκίμασε ξανά αύριο!</p>
+      `);
       topBar.style.display='none';
     } else {
       app.innerHTML=`<div class="spatial-heart" id="spatialHeart"><div class="heart-icon">❤️</div></div>`;
       $('spatialHeart').addEventListener('click', function(){
-        setStore(revealKey,'true');
-        renderClaimState();
+        claimHeart(activeTarget);
       });
     }
   }
+
+  function claimHeart(target){
+    const cKey = countKey(target);
+    const wKey = wonKey(target);
+    // Re-read the count right before claiming in case it changed.
+    let count = parseInt(store(cKey) || '0', 10);
+    if(count >= MAX_DAILY_WINS){
+      renderClaimState(); // someone/something else already used up today's hearts
+      return;
+    }
+    const code = target.codes[count]; // codes[0] for the 1st win today, codes[1] for the 2nd
+    count += 1;
+    setStore(cKey, String(count));
+    setStore(wKey, code);
+    renderClaimState();
+  }
+
   function showModal(html){
     const existing=document.querySelector('.panel.result'); if(existing) existing.remove();
     const d=document.createElement('div');
@@ -341,13 +375,16 @@
     }
 
     if(debugOn){
+      const cKey = countKey(activeTarget);
+      const count = parseInt(store(cKey) || '0', 10);
       debugPanel.innerHTML=
-        `target: ${activeTarget.name}<br>`+
+        `📍 ξενοδοχείο: ${activeTarget.property}<br>`+
         `bearing: ${bearing.toFixed(1)}°<br>`+
         `heading: ${heading.toFixed(1)}°<br>`+
         `diff: ${diff.toFixed(1)}°<br>`+
         `beta: ${currentBeta!==null?currentBeta.toFixed(1):'-'}°<br>`+
-        `distance: ${dist.toFixed(1)} m`;
+        `distance: ${dist.toFixed(1)} m<br>`+
+        `καρδιές σήμερα: ${count}/${MAX_DAILY_WINS}`;
     }
 
     // Show a simple distance hint until you're within the reveal radius
@@ -390,9 +427,14 @@
   });
 
   $('resetBtn').addEventListener('click', function(){
-    for(const t of TARGETS){
-      delStore('priamos_claimed_'+t.id); delStore('priamos_revealed_'+t.id);
-    }
+    try{
+      const toRemove=[];
+      for(let i=0;i<localStorage.length;i++){
+        const k=localStorage.key(i);
+        if(k && k.indexOf('priamos_')===0) toRemove.push(k);
+      }
+      toRemove.forEach(k=>localStorage.removeItem(k));
+    }catch(e){}
     location.reload();
   });
 })();
