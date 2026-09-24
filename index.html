@@ -129,7 +129,7 @@
   <div class="panel" id="motionScreen" style="display:none;">
     <div style="font-size:44px;margin-bottom:10px;">🧭</div>
     <h1>Ενεργοποίηση πυξίδας</h1>
-    <p>Το iPhone χρειάζεται ρητή άδεια για την πυξίδα. Πάτα το κουμπί και αποδέξου.</p>
+    <p>Το κινητό χρειάζεται ρητή άδεια για την πυξίδα. Πάτα το κουμπί και αποδέξου.</p>
     <button class="btn" id="motionBtn">Ενεργοποίηση</button>
   </div>
 
@@ -157,8 +157,8 @@
   const FOV = 50;
   const store = k => { try { return localStorage.getItem(k); } catch(e){ return null; } };
   const setStore = (k,v) => { try { localStorage.setItem(k,v); } catch(e){} };
-  const delStore = k => { try { localStorage.removeItem(k); } catch(e){} };
-
+  
+  // ΕΔΩ ΒΑΖΕΙΣ ΤΟ ΔΙΚΟ ΣΟΥ WEB APP URL ΑΠΟ ΤΟ GOOGLE APPS SCRIPT
   const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbxmffDxXAz_SV6CxZpbVUdsHFOFnTe17fODjRbrAcUMOzvu-ZGxjKOuS8JdU4wtyzXpOQ/exec';
 
   function todayKey(){
@@ -176,7 +176,6 @@
   ];
   
   const REVEAL_RADIUS_M = 25;
-  const MAX_DAILY_WINS = 2;
 
   let curLat=null, curLng=null, heading=null;
   let currentBeta=null, baselineBeta=90;
@@ -248,7 +247,7 @@
       try{
         const res=await DeviceOrientationEvent.requestPermission();
         if(res==='granted'){ addOrientationListeners(); afterMotionGranted(); }
-        else{ alert('Χωρίς πυξίδα η καρδιά δεν μπορεί να "κρεμαστεί" στον χώρο.'); }
+        else{ alert('Χωρίς πυξίδα η καρδιά δεν μπορεί να εμφανιστεί στον χώρο.'); }
       }catch(e){ console.log(e); }
     } else {
       addOrientationListeners(); afterMotionGranted();
@@ -294,14 +293,17 @@
       showSoldOutScreen();
     } else {
       app.innerHTML=`<div class="spatial-heart" id="spatialHeart"><div class="heart-icon">❤️</div></div>`;
-      $('spatialHeart').addEventListener('click', function(){
-        const currentWonCode = store(wonKey(activeTarget));
-        if(currentWonCode){
-          showWinScreen(currentWonCode);
-        } else {
-          claimHeart(activeTarget);
-        }
-      });
+      const heartEl = $('spatialHeart');
+      if(heartEl){
+        heartEl.addEventListener('click', function(){
+          const currentWonCode = store(wonKey(activeTarget));
+          if(currentWonCode){
+            showWinScreen(currentWonCode);
+          } else {
+            claimHeart(activeTarget);
+          }
+        });
+      }
     }
   }
 
@@ -321,6 +323,7 @@
       closeBtn.addEventListener('click', function(){
         const existing = document.querySelector('.panel.result');
         if(existing) existing.remove();
+        renderClaimState();
       });
     }
   }
